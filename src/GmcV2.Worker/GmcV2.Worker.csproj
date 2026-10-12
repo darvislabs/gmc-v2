@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>12</LangVersion>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\GmcV2.Core\GmcV2.Core.csproj" />
+    <ProjectReference Include="..\GmcV2.Calculation\GmcV2.Calculation.csproj" />
+    <ProjectReference Include="..\GmcV2.Knowledge\GmcV2.Knowledge.csproj" />
+    <ProjectReference Include="..\GmcV2.Infrastructure\GmcV2.Infrastructure.csproj" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,21 @@
+[Bucket]
+Name=gmc-v2
+Comment=GMC v2 — AI-First Group Mediclaim Underwriting Platform
+
+[Unit]
+Description=GMC v2 Web console (Opexminds DS)
+After=network.target docker.service
+
+[Service]
+WorkingDirectory=/home/ubuntu/gmc-v2
+ExecStart=/home/ubuntu/.dotnet/dotnet src/GmcV2.Web/bin/Debug/net8.0/GmcV2.Web.dll --urls http://127.0.0.1:5062
+Restart=always
+RestartSec=3
+User=ubuntu
+Environment=ASPNETCORE_ENVIRONMENT=Production
+Environment=DOTNET_CLI_TELEMETRY_OPTOUT=1
+Environment=GMCV2_DBMODE=sql
+Environment=GMCV2_SQL=Server=localhost,1433;Database=GMCv2;User Id=sa;Password=Gmc0pex!2026;TrustServerCertificate=True
+
+[Install]
+WantedBy=multi-user.target

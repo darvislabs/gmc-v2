@@ -1,0 +1,3 @@
+﻿<Project>
+  <Import Project="../build/GmcV2.Web.props" />
+</Project>

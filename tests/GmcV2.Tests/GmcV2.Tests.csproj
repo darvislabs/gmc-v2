@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>12</LangVersion>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.9.0" />
+    <PackageReference Include="xunit" Version="2.7.0" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.5.7" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\GmcV2.Core\GmcV2.Core.csproj" />
+    <ProjectReference Include="..\..\src\GmcV2.Calculation\GmcV2.Calculation.csproj" />
+    <ProjectReference Include="..\..\src\GmcV2.Knowledge\GmcV2.Knowledge.csproj" />
+    <ProjectReference Include="..\..\src\GmcV2.Infrastructure\GmcV2.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\GmcV2.Worker\GmcV2.Worker.csproj" />
+  </ItemGroup>
+</Project>

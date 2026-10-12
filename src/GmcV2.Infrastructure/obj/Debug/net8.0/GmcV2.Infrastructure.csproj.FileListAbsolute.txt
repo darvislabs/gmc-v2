@@ -1,0 +1,15 @@
+/home/ubuntu/gmc-v2/src/GmcV2.Infrastructure/bin/Debug/net8.0/GmcV2.Infrastructure.deps.json
+/home/ubuntu/gmc-v2/src/GmcV2.Infrastructure/bin/Debug/net8.0/GmcV2.Infrastructure.dll
+/home/ubuntu/gmc-v2/src/GmcV2.Infrastructure/bin/Debug/net8.0/GmcV2.Infrastructure.pdb
+/home/ubuntu/gmc-v2/src/GmcV2.Infrastructure/bin/Debug/net8.0/GmcV2.Core.dll
+/home/ubuntu/gmc-v2/src/GmcV2.Infrastructure/bin/Debug/net8.0/GmcV2.Core.pdb
+/home/ubuntu/gmc-v2/src/GmcV2.Infrastructure/obj/Debug/net8.0/GmcV2.Infrastructure.csproj.AssemblyReference.cache
+/home/ubuntu/gmc-v2/src/GmcV2.Infrastructure/obj/Debug/net8.0/GmcV2.Infrastructure.GeneratedMSBuildEditorConfig.editorconfig
+/home/ubuntu/gmc-v2/src/GmcV2.Infrastructure/obj/Debug/net8.0/GmcV2.Infrastructure.AssemblyInfoInputs.cache
+/home/ubuntu/gmc-v2/src/GmcV2.Infrastructure/obj/Debug/net8.0/GmcV2.Infrastructure.AssemblyInfo.cs
+/home/ubuntu/gmc-v2/src/GmcV2.Infrastructure/obj/Debug/net8.0/GmcV2.Infrastructure.csproj.CoreCompileInputs.cache
+/home/ubuntu/gmc-v2/src/GmcV2.Infrastructure/obj/Debug/net8.0/GmcV2.In.4CEF31E9.Up2Date
+/home/ubuntu/gmc-v2/src/GmcV2.Infrastructure/obj/Debug/net8.0/GmcV2.Infrastructure.dll
+/home/ubuntu/gmc-v2/src/GmcV2.Infrastructure/obj/Debug/net8.0/refint/GmcV2.Infrastructure.dll
+/home/ubuntu/gmc-v2/src/GmcV2.Infrastructure/obj/Debug/net8.0/GmcV2.Infrastructure.pdb
+/home/ubuntu/gmc-v2/src/GmcV2.Infrastructure/obj/Debug/net8.0/ref/GmcV2.Infrastructure.dll
