@@ -90,6 +90,8 @@ public static class Enums
     // ─── Mapping provenance tiers, precedence order (tech §3.8) ───
     public const string TierExactDictionary = "ExactDictionary";
     public const string TierLearnedAlias = "LearnedAlias";
+    public const string TierMaster = "Master";          // clinical coding tier — disease master list
+    public const string TierGolden = "Golden";          // clinical coding tier — human-confirmed golden dataset
     public const string TierRetrieval = "Retrieval";
     public const string TierLlmSemantic = "LlmSemantic";
     public const string TierFuzzy = "Fuzzy";
