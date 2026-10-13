@@ -166,18 +166,49 @@ public static class Program
             return Results.Json(new { caseId = dto.CaseId, caseStatus = c.Status, action = dto.Action });
         });
 
-        // ── console UI ───────────────────────────────────────────────────────
+        // ── console UI (Opexminds shell: sidebar + topbar + KPIs + case table) ─
         app.MapGet("/", async (IGmcRepository repo) =>
         {
             var cases = await repo.ListCasesAsync();
+            int autoQuoted = cases.Count(c => c.Status == Enums.CaseAutoQuoted);
+            int referred = cases.Count(c => c.Status == Enums.CaseReferredToUW);
+            int drafts = cases.Count(c => c.Status == Enums.CaseDraft || c.Status == Enums.CaseAwaitingDocuments);
+            int approved = cases.Count(c => c.Status == Enums.CaseApproved || c.Status == Enums.CaseApprovedWithChanges);
+            string Esc(string? s) => System.Net.WebUtility.HtmlEncode(s ?? "");
+
+            string Badge(string status) => status switch
+            {
+                Enums.CaseAutoQuoted => """<span class="ox-badge ox-badge--ok">AutoQuoted</span>""",
+                Enums.CaseApproved or Enums.CaseApprovedWithChanges => """<span class="ox-badge ox-badge--electric">Approved</span>""",
+                Enums.CaseReferredToUW => """<span class="ox-badge ox-badge--warn">ReferredToUW</span>""",
+                Enums.CaseExceptionPending => """<span class="ox-badge ox-badge--danger">Exception</span>""",
+                Enums.CaseDeclined => """<span class="ox-badge ox-badge--danger">Declined</span>""",
+                _ => """<span class="ox-badge ox-badge--neutral">Draft</span>""",
+            };
+
             var sb = new StringBuilder();
-            sb.Append("""<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>GMC v2 — Opexminds</title><link rel="stylesheet" href="/css/opex.css"></head><body>""");
-            sb.Append("""<header class="opex-header"><h1>GMC v2 · Underwriting Console</h1><p>AI-first group mediclaim underwriting — deterministic core</p></header><main class="opex-main">""");
-            sb.Append($"""<p class="opex-muted">{cases.Count} cases · mode: {(repo is SqlRepository ? "SQL Server (GMCv2)" : "in-memory")}</p>""");
-            sb.Append("""<table class="opex-table"><thead><tr><th>Case</th><th>Client</th><th>Type</th><th>Status</th></tr></thead><tbody>""");
-            foreach (var c in cases.Take(50))
-                sb.Append($"""<tr><td><code>{c.CaseNumber}</code></td><td>{System.Net.WebUtility.HtmlEncode(c.ClientName)}</td><td>{c.BusinessType}</td><td><span class="opex-badge">{c.Status}</span></td></tr>""");
-            sb.Append("""</tbody></table></main></body></html>""");
+            sb.Append("""<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>GMC v2 — Opexminds Underwriting Console</title><link rel="stylesheet" href="/css/opex.css"></head><body>""");
+            sb.Append("""<div class="ox-shell"><aside class="ox-sidebar"><a class="ox-brand" href="/">GMC <span class="ox-brand-sub">v2.0 · Opexminds</span></a><nav class="ox-nav"><div class="ox-nav-section">Underwriting</div><a class="ox-nav-item active" href="/">Cases</a><a class="ox-nav-item" href="/api/v1/exceptions">Exceptions</a><div class="ox-nav-section">System</div><a class="ox-nav-item" href="/health">Health</a></nav><div class="ox-sidebar-footer"><span class="ox-user-name">Darvis</span><span class="ox-user-role">Underwriting Ops</span></div></aside>""");
+            sb.Append("""<div class="ox-main"><header class="ox-topbar"><h1 class="ox-pagetitle">Cases</h1></header><div class="ox-content">""");
+            sb.Append($$"""
+                <div class="ox-kpi-row">
+                  <div class="ox-kpi ox-kpi--primary"><div class="ox-mono-label">TOTAL CASES</div><div class="ox-kpi-num">{{cases.Count}}</div></div>
+                  <div class="ox-kpi ox-kpi--ok"><div class="ox-mono-label">AUTO-QUOTED</div><div class="ox-kpi-num">{{autoQuoted}}</div></div>
+                  <div class="ox-kpi ox-kpi--warn"><div class="ox-mono-label">REFERRED TO UW</div><div class="ox-kpi-num">{{referred}}</div></div>
+                  <div class="ox-kpi ox-kpi--electric"><div class="ox-mono-label">APPROVED</div><div class="ox-kpi-num">{{approved}}</div></div>
+                  <div class="ox-kpi"><div class="ox-mono-label">IN PROGRESS</div><div class="ox-kpi-num">{{drafts}}</div></div>
+                </div>
+                """);
+            if (cases.Count == 0)
+                sb.Append("""<div class="ox-empty-state"><p class="ox-mb-0">No cases yet. Create one via POST /api/v1/cases — the 13-stage pipeline runs automatically once documents land.</p></div>""");
+            else
+            {
+                sb.Append("""<div class="ox-table-wrap"><table class="ox-table"><thead><tr><th>Case</th><th>Client</th><th>Type</th><th>Stage</th><th>Status</th></tr></thead><tbody>""");
+                foreach (var c in cases.Take(100))
+                    sb.Append($$"""<tr><td class="ox-mono">{{c.CaseNumber}}</td><td>{{Esc(c.ClientName)}}</td><td>{{Esc(c.BusinessType)}} · {{Esc(c.BusinessSubType)}}</td><td>{{Esc(c.CurrentStage ?? "—")}}</td><td>{{Badge(c.Status)}}</td></tr>""");
+                sb.Append("""</tbody></table></div>""");
+            }
+            sb.Append("""<div class="ox-footer">GMC v2.0 · deterministic underwriting core · Opexminds design system</div></div></div></div></body></html>""");
             return Results.Content(sb.ToString(), "text/html; charset=utf-8");
         });
 
