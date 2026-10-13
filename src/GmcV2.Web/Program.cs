@@ -14,6 +14,7 @@ public static class Program
     {
         var repo = WebHostFactory.BuildRepo();
         if (repo is InMemoryRepository mem) await SeedRunner.SeedReferenceDataAsync(mem);
+        await WebSeed.EnsureAsync(repo);
 
         var builder = WebApplication.CreateBuilder(args);
         builder.Services.AddSingleton(repo);

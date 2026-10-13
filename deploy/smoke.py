@@ -41,7 +41,7 @@ print(f"smoke → {BASE}")
 health = call("GET", "/health")
 ok("health", "ok" in json.dumps(health).lower())
 
-call("POST", "/api/v1/auth/login", {"email": "sales@opexminds.com", "password": "Demo@12345"})
+call("POST", "/api/v1/auth/login", {"email": "sales@opexminds.com", "password": "Sales@12345"})
 ok("login sales", True)
 
 case = call("POST", "/api/v1/cases", {"clientName": "ABC Tech Pvt Ltd", "businessType": "Rollover", "businessSubType": "Main", "industry": "IT/ITES", "tpa": "HealthServe"})

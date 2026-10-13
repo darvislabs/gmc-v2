@@ -783,3 +783,99 @@ html[data-theme="light"] .ox-topbar { background: #FFFFFF; }
         scroll-behavior: auto !important;
     }
 }
+
+/* ======================================================================
+   UIX ADDITIONS — console chrome (burger, bell, drawer, stages, bridge,
+   login, mobile card collapse). Uses existing --ox-* tokens only.
+   ====================================================================== */
+.ox-burger { display: none; background: none; border: none; color: var(--ox-text); font-size: 20px; padding: 4px 8px; cursor: pointer; }
+.ox-bell-wrap { position: relative; }
+.ox-bell { background: none; border: 1px solid var(--ox-border); border-radius: var(--ox-radius); color: var(--ox-text); padding: 6px 10px; cursor: pointer; position: relative; }
+.ox-bell-badge {
+    position: absolute; top: -6px; right: -6px; min-width: 16px; height: 16px;
+    background: var(--ox-danger); color: #fff; border-radius: 8px;
+    font-size: 10px; font-weight: 700; display: flex; align-items: center; justify-content: center; padding: 0 4px;
+}
+.ox-bell-menu {
+    position: absolute; right: 0; top: calc(100% + 8px); width: 340px; max-width: calc(100vw - 32px);
+    background: var(--ox-surface); border: 1px solid var(--ox-border); border-radius: var(--ox-radius);
+    box-shadow: 0 12px 32px rgba(0,0,0,.4); z-index: 60; padding: 8px; max-height: 60vh; overflow-y: auto;
+}
+.ox-bell-item { padding: 10px 12px; border-radius: var(--ox-radius-sm, 8px); cursor: pointer; }
+.ox-bell-item:hover { background: var(--ox-t04); }
+.ox-bell-item.is-read { opacity: .55; }
+.ox-bell-title { font-weight: 600; font-size: 13px; color: var(--ox-text); }
+.ox-bell-body { font-size: 12px; color: var(--ox-text-2, var(--ox-text)); margin-top: 2px; }
+.ox-bell-meta { font-family: var(--ox-font-mono); font-size: 10px; color: var(--ox-text-3); margin-top: 4px; }
+.ox-bell-empty { padding: 20px; text-align: center; color: var(--ox-text-3); font-size: 13px; }
+.ox-bell-clear { width: 100%; margin-top: 6px; }
+
+/* stage list */
+.ox-stagelist { display: flex; flex-direction: column; gap: 2px; margin-top: 8px; }
+.ox-stagerow { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: var(--ox-radius-sm, 8px); }
+.ox-stagerow.is-pending { opacity: .45; }
+.ox-stagerow.is-done { background: var(--ox-t03); }
+.ox-stagerow.is-failed { background: rgba(255, 59, 48, .08); }
+.ox-stagename { font-size: 13px; color: var(--ox-text); }
+.ox-stage-dot--completed { background: var(--ox-ok); }
+.ox-stage-dot--failed { background: var(--ox-danger); }
+
+/* pricing bridge waterfall */
+.ox-bridge { display: flex; flex-direction: column; gap: 2px; margin-top: 8px; }
+.ox-bridge-row {
+    display: grid; grid-template-columns: 34px 1.4fr 1fr 1.2fr; gap: 10px; align-items: baseline;
+    padding: 7px 10px; border-radius: var(--ox-radius-sm, 8px); font-size: 12.5px;
+}
+.ox-bridge-row:nth-of-type(odd) { background: var(--ox-t03); }
+.ox-bridge-row.is-override { background: rgba(255, 159, 10, .10); }
+.ox-bridge-step { color: var(--ox-text-3); font-size: 10.5px; }
+.ox-bridge-name { color: var(--ox-text); font-weight: 500; }
+.ox-bridge-val { color: var(--ox-text); font-family: var(--ox-font-mono); text-align: right; }
+.ox-bridge-basis { color: var(--ox-text-3); font-size: 11px; }
+
+/* guardrail + analytics rows */
+.ox-grrow, .ox-ana-row {
+    display: flex; justify-content: space-between; gap: 12px; align-items: baseline;
+    padding: 7px 10px; font-size: 12.5px; border-radius: var(--ox-radius-sm, 8px);
+}
+.ox-grrow:nth-of-type(odd), .ox-ana-row:nth-of-type(odd) { background: var(--ox-t03); }
+
+/* login */
+.ox-login-wrap { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; background: var(--ox-black); }
+.ox-login-card {
+    width: 100%; max-width: 420px; background: var(--ox-surface); border: 1px solid var(--ox-border);
+    border-radius: var(--ox-radius-lg, 16px); padding: 32px 28px; display: flex; flex-direction: column; gap: 8px;
+}
+.ox-login-brand { border: none; padding: 0; margin-bottom: 4px; height: auto; }
+.ox-login-btn { margin-top: 10px; width: 100%; }
+.ox-chip-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+
+/* drawer (new case) */
+.ox-drawer {
+    position: fixed; top: 0; right: 0; bottom: 0; width: 440px; max-width: 100vw;
+    background: var(--ox-surface); border-left: 1px solid var(--ox-border);
+    z-index: 70; padding: 24px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px;
+}
+.ox-drawer .ox-field { margin-bottom: 10px; display: flex; flex-direction: column; gap: 4px; }
+.ox-drawer input[type="file"] { color: var(--ox-text-3); }
+
+/* mobile: collapse tables to stacked cards */
+@media (max-width: 768px) {
+    .ox-burger { display: inline-block; }
+    .ox-sidebar {
+        position: fixed; z-index: 80; transform: translateX(-100%);
+        transition: transform .22s var(--ox-ease-out); box-shadow: 0 0 40px rgba(0,0,0,.5);
+    }
+    .ox-sidebar-open { transform: translateX(0); }
+    .ox-content { padding: var(--ox-sp-4); }
+    .ox-kpi-row { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+    .ox-grid-2 { grid-template-columns: 1fr; }
+    .ox-bridge-row { grid-template-columns: 28px 1fr auto; }
+    .ox-bridge-basis { display: none; }
+    /* stacked table cards */
+    .ox-case-table thead { display: none; }
+    .ox-case-table tbody tr { display: block; border: 1px solid var(--ox-border); border-radius: var(--ox-radius); padding: 10px 12px; margin-bottom: 10px; }
+    .ox-case-table tbody td { display: flex; justify-content: space-between; align-items: center; border: none; padding: 4px 0; }
+    .ox-case-table tbody td::before { content: attr(data-th); font-family: var(--ox-font-mono); font-size: 10px; color: var(--ox-text-3); text-transform: uppercase; letter-spacing: .08em; }
+    .ox-case-table tbody td.ox-right::before { content: none; }
+}

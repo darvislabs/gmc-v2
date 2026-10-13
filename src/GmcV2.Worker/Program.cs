@@ -4,6 +4,12 @@ using GmcV2.Worker;
 
 namespace GmcV2.Worker;
 
+/// <summary>Worker CLI type alias — the console host class (avoids clash with top-level Program).</summary>
+public static class WorkerCli
+{
+    public static IReadOnlyList<(string Name, string Group, string Icd, bool Chronic, string[] Keywords)> DemoDiseases => Program.DemoDiseases;
+}
+
 /// <summary>
 /// Worker console host — also the smoke-test entrypoint.
 ///   seed      → seed reference data (memory by default; GMCV2_DBMODE=sql → SQL)
@@ -43,7 +49,7 @@ public static class Program
     /// the SQL database already carries the 09_seed.sql rows — AddDiseaseAsync is
     /// idempotent by (name, icd)).
     /// </summary>
-    private static readonly (string Name, string Group, string Icd, bool Chronic, string[] Keywords)[] DemoDiseases =
+    internal static readonly (string Name, string Group, string Icd, bool Chronic, string[] Keywords)[] DemoDiseases =
     {
         ("Type 2 Diabetes Mellitus", "Endocrine", "E11.9", true, new[] { "diabetes", "sugar", "t2dm", "dm" }),
         ("Essential (Primary) Hypertension", "Cardiovascular", "I10", true, new[] { "hypertension", "htn", "bp" }),

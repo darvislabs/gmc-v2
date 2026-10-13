@@ -26,6 +26,7 @@ public static class Api
             ctx.Session.SetString("userId", user.UserId.ToString());
             ctx.Session.SetString("role", user.Role);
             ctx.Session.SetString("displayName", user.DisplayName);
+            ctx.Session.SetString("email", user.Email);
             return Results.Json(new { user.UserId, user.Email, user.Role, user.DisplayName });
         });
 
@@ -158,6 +159,31 @@ public static class Api
             await repo.UpdateCaseAsync(c);
             return Results.Json(new { caseId = dto.CaseId, caseStatus = c.Status, action = dto.Action });
         });
+
+        // ── notifications (in-app center, workflow §12) ──────────────────────
+        app.MapGet("/api/v1/notifications", async (IGmcRepository repo, HttpContext ctx) =>
+        {
+            var role = ctx.Session.GetString("role");
+            _ = long.TryParse(ctx.Session.GetString("userId"), out var uid);
+            return Results.Json(await repo.GetNotificationsAsync(role, uid));
+        });
+
+        app.MapPost("/api/v1/notifications/{id:long}/read", async (long id, IGmcRepository repo) =>
+        {
+            await repo.MarkNotificationReadAsync(id);
+            return Results.Json(new { ok = true });
+        });
+
+        app.MapPost("/api/v1/notifications/read-all", async (IGmcRepository repo, HttpContext ctx) =>
+        {
+            var role = ctx.Session.GetString("role");
+            _ = long.TryParse(ctx.Session.GetString("userId"), out var uid);
+            var n = await repo.MarkAllNotificationsReadAsync(role, uid);
+            return Results.Json(new { ok = true, marked = n });
+        });
+
+        // ── users (admin) ────────────────────────────────────────────────────
+        app.MapGet("/api/v1/users", async (IGmcRepository repo) => Results.Json(await repo.ListUsersAsync()));
     }
 
     internal record LoginDto(string Email, string Password);
