@@ -46,6 +46,7 @@ function renderNav() {
     { hash: '#/', label: 'Cases', show: true },
     { hash: '#/exceptions', label: 'Exceptions', show: true },
     { hash: '#/users', label: 'Users', show: isAdmin() },
+    { hash: '#/admin', label: 'Admin', show: isAdmin() },
     { hash: '#/about', label: 'About', show: true },
   ];
   $('#nav').innerHTML = items.filter(i => i.show)
@@ -84,6 +85,7 @@ const routes = {
   '#/': viewCases,
   '#/exceptions': viewExceptions,
   '#/users': viewUsers,
+  '#/admin': viewAdmin,
   '#/about': viewAbout,
   '#/case': viewCase,
 };
@@ -449,6 +451,57 @@ async function viewUsers() {
           <td data-th="Last login">${u.lastLoginUtc ? new Date(u.lastLoginUtc).toLocaleString('en-IN') : '—'}</td>
         </tr>`).join('')}</tbody>
     </table></div>`;
+}
+
+// ── view: admin (masters, AI gateway, audit, stats) ────────────────────────
+async function viewAdmin() {
+  if (!isAdmin()) { $('#view').innerHTML = '<div class="ox-banner ox-banner--error">Admins only.</div>'; return; }
+  $('#pagetitle').textContent = 'Admin';
+  $('#view').innerHTML = '<div class="ox-skeleton" style="height:200px"></div>';
+  const [stats, masters, ai, audit] = await Promise.all([
+    api('/api/v1/admin/stats').catch(() => null),
+    api('/api/v1/admin/masters').catch(() => []),
+    api('/api/v1/admin/ai-status').catch(() => null),
+    api('/api/v1/admin/audit?limit=50').catch(() => []),
+  ]);
+
+  const masterRows = (masters || []).map(m => `
+    <tr><td class="ox-mono" data-th="Version">${esc(m.versionRef)}</td>
+    <td data-th="Status">${badge(m.status === 'Active' ? 'AutoQuoted' : 'Draft').replace('AutoQuoted', esc(m.status)).replace('Draft', esc(m.status))}</td>
+    <td data-th="From">${new Date(m.effectiveFromUtc).toLocaleDateString('en-IN')}</td>
+    <td data-th="To">${m.effectiveToUtc ? new Date(m.effectiveToUtc).toLocaleDateString('en-IN') : '—'}</td></tr>`).join('');
+
+  const auditRows = (audit || []).map(a => `
+    <tr><td data-th="When">${new Date(a.createdAtUtc).toLocaleString('en-IN')}</td>
+    <td class="ox-mono" data-th="Entity">${esc(a.entityType || '—')}${a.entityId ? '#' + a.entityId : ''}</td>
+    <td data-th="Action">${esc(a.action || '—')}</td>
+    <td data-th="Actor">${esc(a.actorType || '')} ${esc(a.actorId || '')}</td></tr>`).join('');
+
+  $('#view').innerHTML = `
+    ${stats ? `
+    <div class="ox-kpi-row">
+      <div class="ox-kpi ox-kpi--primary"><div class="ox-mono-label">TOTAL CASES</div><div class="ox-kpi-num">${stats.totalCases}</div></div>
+      <div class="ox-kpi ox-kpi--ok"><div class="ox-mono-label">STRAIGHT-THROUGH %</div><div class="ox-kpi-num">${stats.straightThroughRatePct}%</div></div>
+      <div class="ox-kpi ox-kpi--warn"><div class="ox-mono-label">REFERRAL %</div><div class="ox-kpi-num">${stats.referralRatePct}%</div></div>
+    </div>` : ''}
+    <div class="ox-grid-2" style="margin-top:16px">
+      <div class="ox-card">
+        <div class="ox-mono-label">AI GATEWAY — ${esc(ai?.mode || 'deterministic-only')}</div>
+        <div class="ox-ana">
+          ${[['Extraction agent', ai?.extraction], ['Mapping agent', ai?.mapping], ['Clinical coding agent', ai?.clinical], ['Narrative agent', ai?.narrative]]
+            .map(([k, v]) => `<div class="ox-ana-row"><span class="ox-muted">${k}</span><span>${v ? '● wired' : '○ not wired'}</span></div>`).join('')}
+        </div>
+        <p class="ox-muted" style="font-size:12px">${esc(ai?.note || '')}</p>
+      </div>
+      <div class="ox-card">
+        <div class="ox-mono-label">PRICING MASTERS</div>
+        <div class="ox-table-wrap"><table class="ox-table"><thead><tr><th>Version</th><th>Status</th><th>From</th><th>To</th></tr></thead><tbody>${masterRows}</tbody></table></div>
+      </div>
+    </div>
+    <div class="ox-card" style="margin-top:16px">
+      <div class="ox-mono-label">AUDIT LOG (LAST 50)</div>
+      ${auditRows ? `<div class="ox-table-wrap"><table class="ox-table"><thead><tr><th>When</th><th>Entity</th><th>Action</th><th>Actor</th></tr></thead><tbody>${auditRows}</tbody></table></div>` : '<p class="ox-muted">No audit entries yet.</p>'}
+    </div>`;
 }
 
 // ── view: about ────────────────────────────────────────────────────────────

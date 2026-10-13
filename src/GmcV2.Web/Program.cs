@@ -15,6 +15,7 @@ public static class Program
         var repo = WebHostFactory.BuildRepo();
         if (repo is InMemoryRepository mem) await SeedRunner.SeedReferenceDataAsync(mem);
         await WebSeed.EnsureAsync(repo);
+        if (Environment.GetEnvironmentVariable("GMCV2_SQL") is { Length: > 0 } cs) ConnectionStringHolder.Set(cs);
 
         var builder = WebApplication.CreateBuilder(args);
         builder.Services.AddSingleton(repo);
@@ -27,6 +28,7 @@ public static class Program
         app.UseSession();
 
         Api.MapAll(app);
+        ApiAdmin.MapAll(app);
         Pages.MapAll(app);
 
         app.UseStaticFiles();

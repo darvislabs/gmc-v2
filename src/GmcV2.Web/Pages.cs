@@ -34,6 +34,12 @@ public static class Pages
             if (ctx.Session.GetString("userId") is null) return Results.Redirect("/login");
             return Results.Content(Shell(), "text/html; charset=utf-8");
         });
+
+        app.MapGet("/admin", (HttpContext ctx) =>
+        {
+            if (ctx.Session.GetString("userId") is null) return Results.Redirect("/login");
+            return Results.Content(Shell(), "text/html; charset=utf-8");
+        });
     }
 
     private static string Shell() => """
