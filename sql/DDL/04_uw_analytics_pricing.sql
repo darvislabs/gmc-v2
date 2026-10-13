@@ -91,7 +91,7 @@ BEGIN
     CREATE TABLE uw.PricingMasterVersion(
         PricingMasterVersionId INT IDENTITY(1,1) NOT NULL CONSTRAINT PK_uw_PricingMasterVersion PRIMARY KEY,
         VersionLabel     NVARCHAR(30)  NOT NULL,
-        Status           NVARCHAR(20)  NOT NULL CONSTRAINT DF_PMV_Status DEFAULT (N'Draft') CONSTRAINT CK_PMV_Status CHECK (Status IN (N'Draft',N'Active',N'Retired')),
+        Status           NVARCHAR(20)  NOT NULL CONSTRAINT DF_PMV_Status DEFAULT (N'Draft') CONSTRAINT CK_PMV_Status CHECK (Status IN (N'Draft',N'Active',N'Retired',N'Superseded')),
         EffectiveFrom    DATE          NOT NULL,
         EffectiveTo      DATE          NULL,
         PublishedByUserId INT          NULL,

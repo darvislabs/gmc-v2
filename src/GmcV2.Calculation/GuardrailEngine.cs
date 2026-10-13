@@ -21,8 +21,8 @@ public sealed class GuardrailEngine
 
         foreach (var rule in rules)
         {
-            // fresh business: experience rules are NotApplicable, never failed (workflow §10)
-            if (!experienceDependent && !rule.AppliesToExperienceBusiness)
+            // fresh business: experience-only rules are NotApplicable, never failed (workflow §10)
+            if (!experienceDependent && rule.AppliesToExperienceBusiness)
             {
                 evals.Add(new GuardrailEvaluation
                 {

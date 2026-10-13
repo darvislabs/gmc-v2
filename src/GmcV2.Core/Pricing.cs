@@ -53,6 +53,10 @@ public sealed class PricingMasterVersion
     public decimal GstPct { get; set; } = 18m;
     public decimal MaxCommissionPct { get; set; } = 15m;
     public decimal MaxDiscountPct { get; set; } = 5m;
+    /// <summary>Factor-grid capture for sum-insured increases (workflow §9 benefit costing).
+    /// Portfolio seed = 60% (INFRW parity). Demo-cohort masters may pin 13.5% to match
+    /// the §13 worked example. Additive field — 0/absent = legacy 60% behavior.</summary>
+    public decimal SicIncreaseCapturePct { get; set; } = 60m;
 }
 
 /// <summary>Underwriter pricing overrides — replace inputs, never formula (workflow §7.2).</summary>

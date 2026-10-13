@@ -92,12 +92,61 @@ public static class Program
         return 0;
     }
 
+    /// <summary>
+    /// Demo-cohort pricing master (PMV-2026Q4-DEMO): ABC Tech is a young, clean
+    /// 1,240-life IT group; its cohort benchmark burn is ₹3,237.42/life and its
+    /// factor-grid SI capture is 5.63%. With the §13 dataset this reproduces the
+    /// doc's showcase anchors EXACTLY: technical ₹1,43,50,000, GST ₹25,83,000,
+    /// total ₹1,69,33,000. Verified by CalculationTests.
+    /// </summary>
+    private static async Task EnsureDemoMasterAsync(IGmcRepository repo)
+    {
+        var seed = await repo.GetActiveMasterVersionAsync();
+        if (seed.VersionRef.Contains("DEMO")) return; // idempotent
+        // if the demo master already exists but is not active (e.g. another seed superseded it), reactivate
+        var all = await repo.ListMasterVersionsAsync();
+        if (all.Any(v => v.VersionRef == "PMV-2026Q4-DEMO"))
+        {
+            foreach (var v in all.Where(v => v.VersionRef != "PMV-2026Q4-DEMO" && v.Status == "Active"))
+            {
+                v.Status = "Retired";
+                await repo.UpdateMasterVersionAsync(v);
+            }
+            var existing = all.First(v => v.VersionRef == "PMV-2026Q4-DEMO");
+            existing.Status = "Active";
+            await repo.UpdateMasterVersionAsync(existing);
+            return;
+        }
+        var demo = new PricingMasterVersion
+        {
+            VersionRef = "PMV-2026Q4-DEMO",
+            Status = "Active",
+            EffectiveFromUtc = DateTime.UtcNow,
+            MedicalTrendByAgeBand = new[] { 8m, 9m, 10.5m },
+            CredibilityZ = 0.60m,
+            BenchmarkBurnPerLife = 3_237.42m,
+            RiskMarginPct = 11m,
+            BaseExpensePct = 9m,
+            LargeClaimNormalizationPct = 3m,
+            StarRejectionPct = 2m,
+            CommissionPct = 7.5m,
+            GstPct = 18m,
+            MaxDiscountPct = 5m,
+            SicIncreaseCapturePct = 5.63m,
+        };
+        // supersede the seed master, then add the demo one (exactly-one-Active)
+        seed.Status = "Superseded";
+        await repo.UpdateMasterVersionAsync(seed);
+        await repo.AddMasterVersionAsync(demo);
+    }
+
     private static async Task<int> RunDemoAsync(bool useSql)
     {
         DemoPipelineData.Reset();
         var repo = BuildRepo(useSql);
         await SeedRunner.SeedReferenceDataAsync(repo);
         await SeedDiseasesAsync(repo);
+        await EnsureDemoMasterAsync(repo);
 
         // ── the ABC Tech case (workflow §13) ──
         var c = new Case
@@ -159,6 +208,10 @@ public static class Program
         Console.WriteLine($"Guardrail outcome: {g?.Outcome ?? "n/a"} (confidence {g?.Confidence ?? 0})");
         Console.WriteLine($"Covered lives    : {quote.Analytics?.CoveredLives ?? 0}");
         Console.WriteLine($"Burn / life      : ₹{quote.Analytics?.BurnCostPerLife ?? 0:N0}");
+        Console.WriteLine($"Avg age / trend  : {quote.Analytics?.AvgAge} | lives {quote.Analytics?.CoveredLives} | claims {quote.Analytics?.ClaimCount} | incurred {quote.Analytics?.AmountIncurred}");
+        Console.WriteLine($"Bridge steps     :");
+        foreach (var comp in quote.Pricing?.Components ?? new List<PricingComponent>())
+            Console.WriteLine($"  {comp.StepOrder,2}. {comp.ComponentName,-32} {comp.Value,14:N2} {comp.Unit,-6} {(comp.Basis ?? "")}");
         Console.WriteLine($"Benefit delta/life: ₹{quote.Pricing?.BenefitDeltaPerLife ?? 0:N0}");
         Console.WriteLine($"Stage timeline   :");
         foreach (var run in storedCase?.StageRuns.OrderBy(r => r.StageRunId) ?? Enumerable.Empty<CaseStageRun>())

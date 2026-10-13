@@ -151,11 +151,14 @@ public sealed class SqlRepository : IGmcRepository
     public async Task<Case?> GetCaseAsync(long caseId)
     {
         await using var conn = await OpenAsync();
-        using var cmd = Cmd(conn, CaseSelect + " WHERE CaseId = @id");
-        cmd.Parameters.AddWithValue("@id", caseId);
-        using var r = await cmd.ExecuteReaderAsync();
-        if (!await r.ReadAsync()) return null;
-        var c = MapCase(r);
+        Case c;
+        using (var cmd = Cmd(conn, CaseSelect + " WHERE CaseId = @id"))
+        {
+            cmd.Parameters.AddWithValue("@id", caseId);
+            using var r = await cmd.ExecuteReaderAsync();
+            if (!await r.ReadAsync()) return null;
+            c = MapCase(r);
+        }
         await LoadCaseChildrenAsync(conn, c);
         return c;
     }
@@ -163,11 +166,14 @@ public sealed class SqlRepository : IGmcRepository
     public async Task<Case?> GetCaseByNumberAsync(string caseNumber)
     {
         await using var conn = await OpenAsync();
-        using var cmd = Cmd(conn, CaseSelect + " WHERE CaseNo = @no");
-        cmd.Parameters.AddWithValue("@no", caseNumber);
-        using var r = await cmd.ExecuteReaderAsync();
-        if (!await r.ReadAsync()) return null;
-        var c = MapCase(r);
+        Case c;
+        using (var cmd = Cmd(conn, CaseSelect + " WHERE CaseNo = @no"))
+        {
+            cmd.Parameters.AddWithValue("@no", caseNumber);
+            using var r = await cmd.ExecuteReaderAsync();
+            if (!await r.ReadAsync()) return null;
+            c = MapCase(r);
+        }
         await LoadCaseChildrenAsync(conn, c);
         return c;
     }
@@ -954,6 +960,26 @@ public sealed class SqlRepository : IGmcRepository
 
     // ─────────────────────────── pricing masters ───────────────────────────
 
+    public async Task<List<PricingMasterVersion>> ListMasterVersionsAsync()
+    {
+        var list = new List<PricingMasterVersion>();
+        await using var conn = await OpenAsync();
+        using var cmd = Cmd(conn, "SELECT PricingMasterVersionId, VersionLabel, Status, EffectiveFrom, EffectiveTo FROM uw.PricingMasterVersion ORDER BY PricingMasterVersionId");
+        using var r = await cmd.ExecuteReaderAsync();
+        while (await r.ReadAsync())
+        {
+            list.Add(new PricingMasterVersion
+            {
+                MasterVersionId = I(r["PricingMasterVersionId"]),
+                VersionRef = S(r["VersionLabel"]),
+                Status = S(r["Status"]),
+                EffectiveFromUtc = T(r["EffectiveFrom"]),
+                EffectiveToUtc = TN(r["EffectiveTo"]),
+            });
+        }
+        return list;
+    }
+
     public async Task<PricingMasterVersion> GetActiveMasterVersionAsync()
     {
         await using var conn = await OpenAsync();
@@ -1010,13 +1036,28 @@ public sealed class SqlRepository : IGmcRepository
                         break;
                     case "Gst": v.GstPct = val; break;
                     case "MaxDiscount": v.MaxDiscountPct = val; break;
+                    case "SicIncreaseCapture": v.SicIncreaseCapturePct = val; break;
                 }
             }
         }
         return v;
     }
 
-    public async Task AddMasterVersionAsync(PricingMasterVersion v)
+    public async Task UpdateMasterVersionAsync(PricingMasterVersion v)
+    {
+        await using var conn = await OpenAsync();
+        using var cmd = Cmd(conn, """
+            UPDATE uw.PricingMasterVersion
+               SET Status = @status, EffectiveTo = @to
+             WHERE PricingMasterVersionId = @id
+            """);
+        cmd.Parameters.AddWithValue("@status", v.Status);
+        cmd.Parameters.AddWithValue("@to", (object?)v.EffectiveToUtc ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@id", v.MasterVersionId);
+        await cmd.ExecuteNonQueryAsync();
+    }
+
+public async Task AddMasterVersionAsync(PricingMasterVersion v)
     {
         await using var conn = await OpenAsync();
         await using var tx = (SqlTransaction)await conn.BeginTransactionAsync();
@@ -1063,6 +1104,7 @@ public sealed class SqlRepository : IGmcRepository
         AddBand("Commission", "Max", v.MaxCommissionPct, "Percent", 2);
         AddBand("Gst", "Default", v.GstPct, "Percent", 1);
         AddBand("MaxDiscount", "Default", v.MaxDiscountPct, "Percent", 1);
+            AddBand("SicIncreaseCapture", "Default", v.SicIncreaseCapturePct, "Percent", 1);
 
         await tx.CommitAsync();
     }

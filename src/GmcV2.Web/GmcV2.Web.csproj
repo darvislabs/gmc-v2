@@ -10,5 +10,6 @@
     <ProjectReference Include="..\GmcV2.Calculation\GmcV2.Calculation.csproj" />
     <ProjectReference Include="..\GmcV2.Knowledge\GmcV2.Knowledge.csproj" />
     <ProjectReference Include="..\GmcV2.Infrastructure\GmcV2.Infrastructure.csproj" />
+    <ProjectReference Include="..\GmcV2.Worker\GmcV2.Worker.csproj" />
   </ItemGroup>
 </Project>

@@ -577,6 +577,14 @@ public sealed class InMemoryRepository : IGmcRepository
 
     // ─────────────────────────── pricing masters ───────────────────────────
 
+    public Task<List<PricingMasterVersion>> ListMasterVersionsAsync()
+    {
+        lock (_gate)
+        {
+            return Task.FromResult(_masters.Select(x => x).ToList());
+        }
+    }
+
     public Task<PricingMasterVersion> GetActiveMasterVersionAsync()
     {
         lock (_gate)
@@ -597,6 +605,17 @@ public sealed class InMemoryRepository : IGmcRepository
             v.MasterVersionId = ++_masterSeq;
             if (v.EffectiveFromUtc == default) v.EffectiveFromUtc = DateTime.UtcNow;
             _masters.Add(v);
+            return Task.CompletedTask;
+        }
+    }
+
+    public Task UpdateMasterVersionAsync(PricingMasterVersion v)
+    {
+        lock (_gate)
+        {
+            var existing = _masters.FirstOrDefault(x => x.MasterVersionId == v.MasterVersionId);
+            if (existing is null) throw new InvalidOperationException($"Master version {v.MasterVersionId} not found.");
+            _masters[_masters.IndexOf(existing)] = v;
             return Task.CompletedTask;
         }
     }

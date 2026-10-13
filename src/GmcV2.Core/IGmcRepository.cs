@@ -60,7 +60,9 @@ public interface IGmcRepository
 
     // Pricing masters
     Task<PricingMasterVersion> GetActiveMasterVersionAsync();
+    Task<List<PricingMasterVersion>> ListMasterVersionsAsync();
     Task AddMasterVersionAsync(PricingMasterVersion v);
+    Task UpdateMasterVersionAsync(PricingMasterVersion v);
 
     // Guardrails
     Task<List<GuardrailRuleDef>> GetGuardrailRulesAsync();

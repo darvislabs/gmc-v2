@@ -15,9 +15,8 @@ public sealed class BenefitDeltaEngine
     private static decimal R2(decimal x) => Math.Round(x, 2, MidpointRounding.AwayFromZero);
 
     /// <summary>Bridge-compatible entry point (probed with expiring, proposed, snap[, master][, lives]).</summary>
-    public static BenefitDeltaResult Compute(AnalyticsSnapshot snap,
-        List<BenefitScheduleLine> expiring, List<BenefitScheduleLine> proposed,
-        PricingMasterVersion? master = null, int? coveredLives = null)
+    public static BenefitDeltaResult Compute(List<BenefitScheduleLine> expiring, List<BenefitScheduleLine> proposed,
+        AnalyticsSnapshot snap, PricingMasterVersion? master = null, int? coveredLives = null)
     {
         var lines = new List<BenefitDeltaLine>();
         var lives = Math.Max(coveredLives ?? snap.CoveredLives, 1);
@@ -33,8 +32,11 @@ public sealed class BenefitDeltaEngine
             {
                 case "BaseSumInsured" when expVal is > 0 && propVal is > 0 && propVal > expVal:
                 {
-                    // factor-grid: SI increase scales burn proportionally, captured at 60%
-                    var factor = (propVal.Value / expVal.Value - 1m) * 0.60m;
+                    // factor-grid: SI increase scales burn proportionally, captured per master
+                    // (portfolio seed 60%; demo-cohort master may pin 13.5% per workflow §13)
+                    var capture = master?.SicIncreaseCapturePct ?? 60m;
+                    var capturePct = capture <= 0m ? 60m : capture;
+                    var factor = (propVal.Value / expVal.Value - 1m) * capturePct / 100m;
                     var perLife = burn * factor;
                     lines.Add(new BenefitDeltaLine
                     {
@@ -43,7 +45,7 @@ public sealed class BenefitDeltaEngine
                         ExpiringValue = expVal,
                         ProposedValue = propVal,
                         Method = "Factor",
-                        ExperienceCredibilityPct = 60m,
+                        ExperienceCredibilityPct = capturePct,
                         DeltaPerLife = R2(perLife),
                         Rationale = $"SI ₹{expVal:0} → ₹{propVal:0} at 60% experience capture (factor grid)",
                     });

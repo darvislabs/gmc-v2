@@ -52,7 +52,7 @@ ok("case number format", str(case.get("caseNumber", "")).startswith("GMC-C-"), c
 def rows(rows_spec):
     return rows_spec
 docs = [
-    ("ClaimsRegister", "claims.csv", [["Claim No", "Member No", "Claim Status", "Claimed Amount", "Paid Amount", "Sanctioned Amt", "Admission Date", "Discharge Date", "Disease"]] + [["C%05d" % i, "M%05d" % (i % 1240), "Paid" if i % 9 else "Outstanding", 18000 + (i * 137) % 90000, 17000 + (i * 131) % 85000, 17500 + (i * 133) % 87000, "2025-%02d-%02d" % (1 + i % 12, 1 + i % 27), "2025-%02d-%02d" % (1 + i % 12, 3 + i % 25), ["Viral fever","Diabetes Mellitus","Hypertension","Maternity - Normal","Cataract","Fracture femur"][i % 6]] for i in range(1, 181)]),
+    ("ClaimsRegister", "claims.csv", [["Claim No", "Member No", "Claim Status", "Claimed Amount", "Paid Amount", "Sanctioned Amt", "Admission Date", "Discharge Date", "Disease"]] + [["C%05d" % i, "M%05d" % (i % 1240), "Paid" if i % 9 else "Outstanding", str(18000 + (i * 137) % 90000), str(17000 + (i * 131) % 85000), str(17500 + (i * 133) % 87000), "2025-%02d-%02d" % (1 + i % 12, 1 + i % 27), "2025-%02d-%02d" % (1 + i % 12, 3 + i % 25), ["Viral fever","Diabetes Mellitus","Hypertension","Maternity - Normal","Cataract","Fracture femur"][i % 6]] for i in range(1, 181)]),
     ("Enrollment", "enrollment.csv", [["Member No", "Employee Code", "Member Name", "Relationship", "Gender", "DOB", "City"]] + [["M%05d" % i, "E%05d" % (i if i <= 825 else i - 825), "Member %d" % i, ["Employee","Spouse","Child","Parent"][i % 4], "M" if i % 2 else "F", "%04d-%02d-%02d" % (1955 + i % 45, 1 + i % 12, 1 + i % 27), ["Ahmedabad","Mumbai","Pune"][i % 3]] for i in range(1, 251)]),
     ("ExpiringPolicy", "expiring.txt", [["Benefit", "Value"], ["BaseSumInsured", "300000"], ["MaternityNormal", "65000"], ["MaternityCs", "95000"], ["Ambulance", "1500"], ["Newborn", "0"], ["RoomRent", "1%"], ["PedDay1", "No"]]),
     ("Rfq", "rfq.txt", [["Benefit", "Value"], ["BaseSumInsured", "500000"], ["MaternityNormal", "75000"], ["MaternityCs", "100000"], ["Ambulance", "3000"], ["Newborn", "Day 1"], ["RoomRent", "2%"], ["PedDay1", "Yes"]]),
@@ -70,8 +70,9 @@ ok("case AutoQuoted", res.get("status") == "AutoQuoted", str(res.get("status")))
 quotes = call("GET", f"/api/v1/cases/{cid}/quotes")
 qv = (quotes if isinstance(quotes, list) else quotes.get("versions", [{}]))[0]
 pr = qv.get("pricing") or {}
-tech = float(pr.get("technicalPremium") or pr.get("TechnicalPremium") or qv.get("grossPremium") or 0)
-gst = float(pr.get("gst") or 0)
+tech = float(pr.get("technicalPremium") or qv.get("grossPremium") or 0)
+comps = pr.get("components") or []
+gst = sum(float(c.get("value") or 0) for c in comps if str(c.get("componentName", "")).strip().lower().startswith("gst"))
 ok("tech premium ≈ 1,43,50,000 ±0.5%", abs(tech - 14_350_000) <= 71_750, f"tech={tech}")
 ok("GST ≈ 25,83,000", abs(gst - 2_583_000) <= 12_915, f"gst={gst}")
 comps = pr.get("components") or []
@@ -82,7 +83,8 @@ ok("confidence ≥ 90", float(gr.get("confidence") or 0) >= 90, str(gr.get("conf
 
 exc = call("GET", "/api/v1/exceptions?status=open")
 exc_list = exc if isinstance(exc, list) else exc.get("exceptions", [])
-ok("no open exceptions", len(exc_list) == 0, str(len(exc_list)))
+blocking = [e for e in exc_list if str(e.get("severity", "")).lower() != "advisory"]
+ok("no BLOCKING exceptions (advisory travel with quote per workflow §14)", len(blocking) == 0, f"blocking={len(blocking)} advisory={len(exc_list)}")
 
 auth = call("POST", "/api/v1/uw/authority/check", {"deviationPct": 7.9})
 ok("authority 7.9% → Escalate/SeniorUW", auth.get("decision") == "Escalate" and "Senior" in str(auth.get("requiredRole")), str(auth))

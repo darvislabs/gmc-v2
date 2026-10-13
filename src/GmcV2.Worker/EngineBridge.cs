@@ -381,7 +381,12 @@ public static class EngineBridge
                 try
                 {
                     var args = new List<object?> { expiring, proposed, snap };
-                    while (args.Count < ps.Length) args.Add(ps[args.Count].ParameterType == typeof(int) ? coveredLives : master);
+                    while (args.Count < ps.Length)
+                    {
+                        var pt = ps[args.Count].ParameterType;
+                        if (pt == typeof(int) || pt == typeof(int?)) args.Add(coveredLives);
+                        else args.Add(master);
+                    }
                     var invoke = m.Invoke(null, args.Take(ps.Length).ToArray());
                     if (invoke is BenefitDeltaResult d) return d;
                     var tt = invoke?.GetType();

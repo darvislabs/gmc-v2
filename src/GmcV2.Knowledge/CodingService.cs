@@ -32,7 +32,7 @@ public sealed class CodingService
 
     private readonly Dictionary<string, DiseaseEntry> _byName;
     private readonly List<(string[] Keywords, DiseaseEntry Entry)> _byKeyword;
-    private readonly Dictionary<string, (GoldenEntry Entry, decimal Sim)> _golden;
+    private readonly Dictionary<string, (GoldenEntry Entry, decimal Sim)>? _golden;
 
     public CodingService(List<DiseaseEntry> diseases, List<GoldenEntry> golden)
     {

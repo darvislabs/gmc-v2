@@ -55,6 +55,8 @@ public sealed class CaseException
     public string Code { get; set; } = "";
     public bool Blocking { get; set; } = true;
     public string Status { get; set; } = "Open";   // Open | Resolved
+    /// <summary>Backing severity column: Blocking | Advisory. Advisory exceptions travel with the quote (workflow §14).</summary>
+    public string Severity => Blocking ? "Blocking" : "Advisory";
     public string SubjectType { get; set; } = "";
     public string SubjectRef { get; set; } = "";
     public string Message { get; set; } = "";
