@@ -235,7 +235,7 @@ public static class StageHandlers
 
         public async Task<StageOutcome> ExecuteAsync(Case c, IGmcRepository repo)
         {
-            var data = DemoPipelineData.Shared;
+            var data = DemoPipelineData.For(c.CaseId);
             var columns = 0;
             foreach (var doc in c.Documents.Where(d => d.ParseStatus == "Parsed"))
             {
@@ -290,7 +290,7 @@ public static class StageHandlers
 
         public Task<StageOutcome> ExecuteAsync(Case c, IGmcRepository repo)
         {
-            var data = DemoPipelineData.Shared;
+            var data = DemoPipelineData.For(c.CaseId);
             return Task.FromResult(new StageOutcome
             {
                 State = Enums.StageCompleted,
@@ -372,7 +372,7 @@ public static class StageHandlers
 
         public Task<StageOutcome> ExecuteAsync(Case c, IGmcRepository repo)
         {
-            var data = DemoPipelineData.Shared;
+            var data = DemoPipelineData.For(c.CaseId);
             return Task.FromResult(new StageOutcome
             {
                 State = Enums.StageCompleted,
@@ -394,7 +394,7 @@ public static class StageHandlers
 
         public async Task<StageOutcome> ExecuteAsync(Case c, IGmcRepository repo)
         {
-            var data = DemoPipelineData.Shared;
+            var data = DemoPipelineData.For(c.CaseId);
             var diseases = await repo.GetDiseasesAsync();
             decimal reviewCost = 0;
             var totalCost = data.Claims.Sum(cl => cl.Incurred);
@@ -466,7 +466,7 @@ public static class StageHandlers
 
         public Task<StageOutcome> ExecuteAsync(Case c, IGmcRepository repo)
         {
-            var data = DemoPipelineData.Shared;
+            var data = DemoPipelineData.For(c.CaseId);
             var snapshot = EngineBridge.ComputeAnalytics(StdMembers(data), StdClaims(data));
             return Task.FromResult(new StageOutcome
             {
@@ -488,7 +488,7 @@ public static class StageHandlers
 
         public async Task<StageOutcome> ExecuteAsync(Case c, IGmcRepository repo)
         {
-            var data = DemoPipelineData.Shared;
+            var data = DemoPipelineData.For(c.CaseId);
             var snapshot = EngineBridge.ComputeAnalytics(StdMembers(data), StdClaims(data));
             var rules = await repo.GetGuardrailRulesAsync();
             if (rules.Count == 0)
@@ -544,7 +544,7 @@ public static class StageHandlers
 
         public Task<StageOutcome> ExecuteAsync(Case c, IGmcRepository repo)
         {
-            var data = DemoPipelineData.Shared;
+            var data = DemoPipelineData.For(c.CaseId);
             var master = repo.GetActiveMasterVersionAsync().GetAwaiter().GetResult();
             var snapshot = EngineBridge.ComputeAnalytics(StdMembers(data), StdClaims(data));
             var delta = EngineBridge.ComputeBenefitDelta(snapshot, data.Expiring, data.Proposed, master, data.Members.Count);
@@ -635,7 +635,7 @@ public static class StageHandlers
                 ?? throw new InvalidOperationException("No pricing result — Price stage must run first.");
             var guardrails = DemoPipelineData.LastGuardrailResult ?? new GuardrailResult();
             var delta = DemoPipelineData.LastBenefitDelta ?? new List<BenefitDeltaLine>();
-            var data = DemoPipelineData.Shared;
+            var data = DemoPipelineData.For(c.CaseId);
             var snapshot = EngineBridge.ComputeAnalytics(StdMembers(data), StdClaims(data));
 
             var quote = new QuoteVersion
@@ -726,6 +726,26 @@ public static class DemoPipelineData
     public static GuardrailResult? LastGuardrailResult { get; set; }
     public static PricingResult? LastPricing { get; set; }
     public static List<BenefitDeltaLine>? LastBenefitDelta { get; set; }
+
+    // ── per-case real-data overrides (RealDataBridge registers parsed uploads here) ──
+    private static readonly object Gate = new();
+    private static readonly Dictionary<long, StageHandlers.DemoData> CaseOverrides = new();
+
+    /// <summary>Case data = real uploaded rows when registered, else the demo dataset.</summary>
+    public static StageHandlers.DemoData For(long caseId)
+    {
+        lock (Gate) { return CaseOverrides.TryGetValue(caseId, out var d) ? d : Shared; }
+    }
+
+    public static void SetCaseData(long caseId, StageHandlers.DemoData data)
+    {
+        lock (Gate) { CaseOverrides[caseId] = data; }
+    }
+
+    public static bool HasOverride(long caseId)
+    {
+        lock (Gate) { return CaseOverrides.ContainsKey(caseId); }
+    }
 
     public static void Reset()
     {

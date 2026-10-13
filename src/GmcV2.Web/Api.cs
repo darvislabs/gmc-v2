@@ -80,15 +80,68 @@ public static class Api
         app.MapGet("/api/v1/cases/{id:long}/documents", async (long id, IGmcRepository repo) =>
             await repo.GetCaseAsync(id) is { } c ? Results.Json(c.Documents) : Results.NotFound(new { error = "case not found" }));
 
+        // ── real file upload: multipart/form-data with a 'file' part (+ 'docType') ──
+        app.MapPost("/api/v1/cases/{id:long}/documents/upload", async (long id, IGmcRepository repo, HttpContext ctx) =>
+        {
+            if (await repo.GetCaseAsync(id) is null) return Results.NotFound(new { error = "case not found" });
+            if (!ctx.Request.HasFormContentType) return Results.BadRequest(new { error = "expected multipart/form-data" });
+            var form = await ctx.Request.ReadFormAsync();
+            var file = form.Files["file"];
+            if (file is null || file.Length == 0) return Results.BadRequest(new { error = "no file part" });
+            if (file.Length > 50 * 1024 * 1024) return Results.BadRequest(new { error = "file exceeds 50 MB" });
+            var docType = form["docType"].ToString();
+            if (string.IsNullOrWhiteSpace(docType)) docType = "Generic";
+
+            await using var ms = new MemoryStream();
+            await file.CopyToAsync(ms);
+            var parsed = FileParser.Parse(file.FileName, ms.ToArray());
+
+            var d = new CaseDocument
+            {
+                CaseId = id,
+                DocType = docType,
+                FileName = file.FileName,
+                ParseStatus = parsed.Error is null ? "Parsed" : "Unreadable",
+                Sha256 = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(ms.ToArray()))[..24],
+            };
+            d = await repo.AddDocumentAsync(d);
+
+            var rowCount = 0;
+            if (parsed.Error is null)
+            {
+                foreach (var sheet in parsed.Sheets)
+                {
+                    var all = new List<string[]> { sheet.Headers.ToArray() };
+                    all.AddRange(sheet.Rows);
+                    await repo.AddRawRowsAsync(d.DocumentId, sheet.SheetName, all);
+                    rowCount += sheet.Rows.Count;
+                }
+            }
+            return Results.Json(new
+            {
+                documentId = d.DocumentId,
+                fileName = d.FileName,
+                docType = d.DocType,
+                parseStatus = d.ParseStatus,
+                format = parsed.Format,
+                sheets = parsed.Sheets.Count,
+                rows = rowCount,
+                error = parsed.Error,
+            });
+        });
+
         // ── pipeline ─────────────────────────────────────────────────────────
         app.MapPost("/api/v1/cases/{id:long}/pipeline/start", async (long id, IGmcRepository repo) =>
         {
             if (await repo.GetCaseAsync(id) is null) return Results.NotFound(new { error = "case not found" });
+            // real uploaded data (parsed files) takes precedence; demo dataset is the fallback
+            var c = await repo.GetCaseAsync(id);
+            if (c is not null) RealDataBridge.TryRegister(id, c, repo);
             var orch = new PipelineOrchestrator(repo, StageHandlers.Demo());
             await orch.RunAsync(id);
-            var c = await repo.GetCaseAsync(id); // fresh from DB so StageRuns reflect persisted runs
-            var stages = c!.StageRuns;
-            return Results.Json(new { caseId = id, status = c.Status, caseNumber = c.CaseNumber, stageCount = stages.Count, stages });
+            var fresh = await repo.GetCaseAsync(id); // fresh from DB so StageRuns reflect persisted runs
+            var stages = fresh!.StageRuns;
+            return Results.Json(new { caseId = id, status = fresh.Status, caseNumber = fresh.CaseNumber, stageCount = stages.Count, stages, dataSource = DemoPipelineData.HasOverride(id) ? "uploaded" : "demo" });
         });
 
         app.MapGet("/api/v1/cases/{id:long}/pipeline", async (long id, IGmcRepository repo) =>
