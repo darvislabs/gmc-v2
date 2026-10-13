@@ -1,0 +1,169 @@
+/* ==================================================================
+   GMC v2 — ENTERPRISE POLISH LAYER (pass 2)
+   ------------------------------------------------------------------
+   Upgrades on top of opex.css toward Linear/Stripe-grade SaaS:
+   1. Self-hosted brand fonts (Cabinet Grotesk / Inter / JetBrains Mono)
+   2. SVG icon system (no emoji in chrome)
+   3. Refined surfaces: layered elevation, hairline discipline
+   4. Motion pass: 160ms press, scale(.97) active, GPU-only
+   5. Focus-visible rings, AA-contrast text tiers
+   ================================================================== */
+
+/* ---------------- 1. FONTS (self-hosted, swap) ---------------- */
+@font-face {
+  font-family: "Cabinet Grotesk";
+  src: url("/fonts/cabinet-grotesk-400.woff2") format("woff2");
+  font-weight: 400; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: "Cabinet Grotesk";
+  src: url("/fonts/cabinet-grotesk-500.woff2") format("woff2");
+  font-weight: 500 600; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: "Cabinet Grotesk";
+  src: url("/fonts/cabinet-grotesk-700.woff2") format("woff2");
+  font-weight: 700 800; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: "Inter";
+  src: url("/fonts/inter-400.woff2") format("woff2");
+  font-weight: 400; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: "Inter";
+  src: url("/fonts/inter-500.woff2") format("woff2");
+  font-weight: 500; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: "Inter";
+  src: url("/fonts/inter-600.woff2") format("woff2");
+  font-weight: 600 700; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  src: url("/fonts/jetbrains-mono-400.woff2") format("woff2");
+  font-weight: 400; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  src: url("/fonts/jetbrains-mono-500.woff2") format("woff2");
+  font-weight: 500 700; font-style: normal; font-display: swap;
+}
+
+:root {
+  --ox-font-display: "Cabinet Grotesk", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --ox-font-body: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --ox-font-mono: "JetBrains Mono", ui-monospace, "SF Mono", "Cascadia Mono", monospace;
+
+  /* elevation ladder (dark) */
+  --ox-elev-1: 0 1px 2px rgba(0,0,0,.28), 0 0 0 1px rgba(252,252,252,.03);
+  --ox-elev-2: 0 4px 16px -2px rgba(0,0,0,.4), 0 0 0 1px rgba(252,252,252,.045);
+  --ox-elev-3: 0 16px 48px -8px rgba(0,0,0,.55), 0 0 0 1px rgba(252,252,252,.06);
+  /* motion */
+  --ox-ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ox-ease-inout: cubic-bezier(0.77, 0, 0.175, 1);
+  --ox-t-fast: 120ms; --ox-t-ui: 160ms; --ox-t-panel: 240ms;
+}
+html[data-theme="light"] {
+  --ox-elev-1: 0 1px 2px rgba(15,23,42,.06), 0 0 0 1px rgba(15,23,42,.05);
+  --ox-elev-2: 0 4px 16px -2px rgba(15,23,42,.1), 0 0 0 1px rgba(15,23,42,.06);
+  --ox-elev-3: 0 16px 48px -8px rgba(15,23,42,.16), 0 0 0 1px rgba(15,23,42,.07);
+}
+
+/* ---------------- 2. SVG ICON SYSTEM ---------------- */
+/* inline <svg class="ox-i"> via mask — crisp, theme-following, no emoji */
+.ox-i {
+  display: inline-block; width: 16px; height: 16px; flex: none;
+  background: currentColor; -webkit-mask: var(--ox-i-src) center/contain no-repeat;
+  mask: var(--ox-i-src) center/contain no-repeat;
+  vertical-align: -2px;
+}
+.ox-i--bell    { --ox-i-src: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9'/%3E%3Cpath d='M10.3 21a1.94 1.94 0 0 0 3.4 0'/%3E%3C/svg%3E"); }
+.ox-i--menu    { --ox-i-src: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M4 6h16M4 12h16M4 18h10'/%3E%3C/svg%3E"); }
+.ox-i--plus    { --ox-i-src: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M12 5v14M5 12h14'/%3E%3C/svg%3E"); }
+.ox-i--doc     { --ox-i-src: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z'/%3E%3Cpath d='M14 2v6h6'/%3E%3C/svg%3E"); }
+.ox-i--check   { --ox-i-src: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 6 9 17l-5-5'/%3E%3C/svg%3E"); }
+.ox-i--warn    { --ox-i-src: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m21.7 18-8-14a2 2 0 0 0-3.5 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.7-3'/%3E%3Cpath d='M12 9v4M12 17h.01'/%3E%3C/svg%3E"); }
+.ox-i--up      { --ox-i-src: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m18 15-6-6-6 6'/%3E%3C/svg%3E"); }
+.ox-i--out     { --ox-i-src: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4'/%3E%3Cpath d='m16 17 5-5-5-5M21 12H9'/%3E%3C/svg%3E"); }
+.ox-i--clock   { --ox-i-src: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='9'/%3E%3Cpath d='M12 7v5l3 3'/%3E%3C/svg%3E"); }
+.ox-i--shield  { --ox-i-src: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 13c0 5-3.5 7.5-7.7 9a.6.6 0 0 1-.6 0C7.5 20.5 4 18 4 13V6a1 1 0 0 1 .7-.95C7.4 4.2 10 3.2 11.7 2.1a.6.6 0 0 1 .6 0C14 3.2 16.6 4.2 19.3 5A1 1 0 0 1 20 6z'/%3E%3Cpath d='m9 12 2 2 4-4'/%3E%3C/svg%3E"); }
+.ox-i--rupee   { --ox-i-src: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 3h12M6 8h12M6 13c4 0 7-2 7-5M6 8c4 0 7 2 7 5 0 3-3 5-7 5l7 5'/%3E%3C/svg%3E"); }
+.ox-i--users   { --ox-i-src: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2'/%3E%3Ccircle cx='9' cy='7' r='4'/%3E%3Cpath d='M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75'/%3E%3C/svg%3E"); }
+.ox-i--grid    { --ox-i-src: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='3' width='7' height='7' rx='1'/%3E%3Crect x='14' y='3' width='7' height='7' rx='1'/%3E%3Crect x='3' y='14' width='7' height='7' rx='1'/%3E%3Crect x='14' y='14' width='7' height='7' rx='1'/%3E%3C/svg%3E"); }
+.ox-i--flag    { --ox-i-src: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z'/%3E%3Cpath d='M4 22v-7'/%3E%3C/svg%3E"); }
+.ox-i--spark   { --ox-i-src: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.2 2.2M16.2 16.2l2.2 2.2M5.6 18.4l2.2-2.2M16.2 7.8l2.2-2.2'/%3E%3Ccircle cx='12' cy='12' r='3.2'/%3E%3C/svg%3E"); }
+
+/* swap emoji chrome for icons */
+.ox-bell { font-size: 0; }
+.ox-bell::before { content: ""; display: block; width: 18px; height: 18px;
+  background: currentColor;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9'/%3E%3Cpath d='M10.3 21a1.94 1.94 0 0 0 3.4 0'/%3E%3C/svg%3E") center/contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9'/%3E%3Cpath d='M10.3 21a1.94 1.94 0 0 0 3.4 0'/%3E%3C/svg%3E") center/contain no-repeat; }
+.ox-bell-badge { font-size: 10px; }
+.ox-burger { font-size: 0; }
+.ox-burger::before { content: ""; display: block; width: 18px; height: 18px;
+  background: currentColor;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M4 6h16M4 12h16M4 18h10'/%3E%3C/svg%3E") center/contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M4 6h16M4 12h16M4 18h10'/%3E%3C/svg%3E") center/contain no-repeat; }
+
+/* ---------------- 3. TYPOGRAPHY SCALE ---------------- */
+html { font-size: 15px; -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+body { font-family: var(--ox-font-body); letter-spacing: -0.006em; line-height: 1.5; }
+h1, h2, h3, .ox-pagetitle { font-family: var(--ox-font-display); letter-spacing: -0.02em; }
+.ox-pagetitle { font-weight: 700; font-size: 17px; }
+.ox-brand { font-family: var(--ox-font-display); font-weight: 700; letter-spacing: -0.02em; }
+.ox-brand-sub { font-family: var(--ox-font-mono); font-weight: 400; letter-spacing: .1em; }
+.ox-mono-label, .ox-mono { font-family: var(--ox-font-mono); }
+.ox-mono-label { letter-spacing: .08em; font-weight: 500; }
+.ox-kpi-num { font-family: var(--ox-font-display); font-weight: 700; letter-spacing: -0.025em; font-variant-numeric: tabular-nums; }
+.ox-table td, .ox-table th { font-variant-numeric: tabular-nums; }
+.ox-card > .ox-mono-label:first-child { font-size: 10.5px; }
+
+/* ---------------- 4. SURFACES & ELEVATION ---------------- */
+.ox-card { box-shadow: var(--ox-elev-1); border-radius: 10px; }
+.ox-card:hover { box-shadow: var(--ox-elev-2); }
+.ox-drawer { box-shadow: var(--ox-elev-3); border-radius: 14px 0 0 14px; }
+.ox-bell-menu { box-shadow: var(--ox-elev-3); border-radius: 12px; }
+.ox-kpi { box-shadow: none; }
+.ox-kpi--primary { border-left: 2px solid var(--ox-vivid); }
+.ox-kpi--ok { border-left: 2px solid var(--ox-ok, #2FA45E); }
+.ox-kpi--warn { border-left: 2px solid #EAA40E; }
+.ox-kpi--electric { border-left: 2px solid var(--ox-electric, #00C8FF); }
+
+/* topbar: hairline + slight translucency */
+.ox-topbar { backdrop-filter: blur(8px); }
+
+/* ---------------- 5. INTERACTION POLISH ---------------- */
+.ox-btn { transition: transform var(--ox-t-fast) var(--ox-ease-out), background var(--ox-t-ui) var(--ox-ease-out), border-color var(--ox-t-ui) var(--ox-ease-out), color var(--ox-t-ui) var(--ox-ease-out), box-shadow var(--ox-t-ui) var(--ox-ease-out); }
+.ox-btn:active:not(:disabled) { transform: scale(0.97); }
+.ox-btn--primary { box-shadow: 0 1px 2px rgba(0,0,0,.3), inset 0 1px 0 rgba(252,252,252,.12); }
+.ox-btn--primary:hover:not(:disabled) { box-shadow: 0 2px 8px rgba(27,94,255,.35); }
+:is(.ox-btn, .ox-input, .ox-select, .ox-nav-item, .ox-bell, .ox-burger):focus-visible {
+  outline: 2px solid var(--ox-vivid); outline-offset: 2px; border-radius: 6px;
+}
+.ox-input, .ox-select { transition: border-color var(--ox-t-ui) var(--ox-ease-out), box-shadow var(--ox-t-ui) var(--ox-ease-out), background var(--ox-t-ui) var(--ox-ease-out); }
+.ox-input:focus, .ox-select:focus { border-color: var(--ox-vivid); box-shadow: 0 0 0 3px rgba(27,94,255,.18); outline: none; }
+.ox-input::placeholder { color: var(--ox-t35, rgba(252,252,252,.35)); }
+.ox-nav-item { transition: background var(--ox-t-fast) var(--ox-ease-out), color var(--ox-t-fast) var(--ox-ease-out); }
+.ox-nav-item.is-active { font-weight: 500; }
+.ox-table tbody tr { transition: background var(--ox-t-fast) var(--ox-ease-out); }
+.ox-badge { transition: opacity var(--ox-t-fast) var(--ox-ease-out); }
+.ox-i { transition: opacity var(--ox-t-fast) var(--ox-ease-out); }
+
+/* ---------------- 6. SCROLLBARS (webkit + firefox) ---------------- */
+* { scrollbar-width: thin; scrollbar-color: var(--ox-t20, rgba(252,252,252,.2)) transparent; }
+*::-webkit-scrollbar { width: 8px; height: 8px; }
+*::-webkit-scrollbar-thumb { background: var(--ox-t20, rgba(252,252,252,.2)); border-radius: 8px; }
+*::-webkit-scrollbar-thumb:hover { background: var(--ox-t30, rgba(252,252,252,.3)); }
+*::-webkit-scrollbar-track { background: transparent; }
+
+/* ---------------- 7. STAGE TIMELINE: connector rail ---------------- */
+.ox-stage-list { position: relative; }
+.ox-stage-row + .ox-stage-row { border-top: 1px solid var(--ox-t08, rgba(252,252,252,.08)); }
+
+/* ---------------- 8. REDUCED MOTION ---------------- */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+}

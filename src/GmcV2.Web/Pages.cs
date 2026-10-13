@@ -50,13 +50,14 @@ public static class Pages
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>GMC v2 — Opexminds Underwriting Console</title>
 <link rel="stylesheet" href="/css/opex.css">
+<link rel="stylesheet" href="/css/opex-polish.css">
 </head>
 <body>
 <div class="ox-shell">
   <aside class="ox-sidebar" id="sidebar">
     <a class="ox-brand" href="#/">GMC <span class="ox-brand-sub">v2.0 · Opexminds</span></a>
     <nav class="ox-nav" id="nav"></nav>
-    <div class="ox-sidebar-footer">
+    <div class="ox-sidebar-foot ox-sidebar-footer">
       <span class="ox-user-name" id="who-name">—</span>
       <span class="ox-user-role" id="who-role">—</span>
     </div>
@@ -67,7 +68,7 @@ public static class Pages
       <h1 class="ox-pagetitle" id="pagetitle">Cases</h1>
       <div class="ox-grow"></div>
       <div class="ox-bell-wrap">
-        <button class="ox-bell" id="bell" aria-label="Notifications">🔔<span class="ox-bell-badge ox-hide" id="bell-badge">0</span></button>
+        <button class="ox-bell" id="bell" aria-label="Notifications"><span class="ox-bell-badge ox-hide" id="bell-badge">0</span></button>
         <div class="ox-bell-menu ox-hide" id="bell-menu"></div>
       </div>
       <button class="ox-btn ox-btn--ghost ox-btn--sm" id="logout">Sign out</button>
@@ -89,9 +90,23 @@ public static class Pages
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Sign in — GMC v2 · Opexminds</title>
 <link rel="stylesheet" href="/css/opex.css">
+<link rel="stylesheet" href="/css/opex-polish.css">
 </head>
 <body>
 <div class="ox-login-wrap">
+  <aside class="ox-login-aside">
+    <div>
+      <div class="aside-kicker">GMC v2.0 · Opexminds</div>
+      <h1 class="aside-headline" style="margin-top:18px">Underwrite group health in minutes, not weeks.</h1>
+      <p class="aside-sub">Thirteen automated stages — profile, map, code, analyze, guardrail, price — turn raw claims and enrollment files into a defensible quote.</p>
+    </div>
+    <div class="aside-rows">
+      <div class="aside-row"><b>1,280 members · 4,180 claims</b><span>PRICED IN 0.87s</span></div>
+      <div class="aside-row"><b>Auto-quote confidence</b><span>GUARDRAIL 97.7</span></div>
+      <div class="aside-row"><b>Every decision audited</b><span>ops.AUDITLOG</span></div>
+    </div>
+  </aside>
+  <main class="ox-login-main">
   <form class="ox-login-card" id="login-form">
     <div class="ox-brand ox-login-brand">GMC <span class="ox-brand-sub">v2.0 · Opexminds</span></div>
     <p class="ox-muted">AI-first group mediclaim underwriting. Sign in to continue.</p>
@@ -105,6 +120,7 @@ public static class Pages
     <div class="ox-mono-label">DEMO ROLES — TAP TO FILL</div>
     <div class="ox-chip-row" id="chips"></div>
   </form>
+  </main>
 </div>
 <script>
 const USERS = [

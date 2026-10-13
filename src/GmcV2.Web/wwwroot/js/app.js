@@ -322,14 +322,15 @@ function stageTimeline(stages) {
   const byName = Object.fromEntries(stages.map(s => [s.stage, s]));
   return `<div class="ox-stagelist">${ORDER.map(name => {
     const s = byName[name];
-    if (!s) return `<div class="ox-stagerow is-pending"><span class="ox-stage-dot"></span><span class="ox-stagename">${name}</span><span class="ox-right ox-muted">pending</span></div>`;
-    const cls = s.state === 'Completed' ? 'is-done' : s.state === 'Failed' ? 'is-failed' : s.state === 'Skipped' ? 'is-skip' : '';
-    const dot = s.state === 'Completed' ? 'ox-stage-dot--completed' : s.state === 'Failed' ? 'ox-stage-dot--failed' : '';
-    return `<div class="ox-stagerow ${cls}">
+    if (!s) return `<div class="ox-stagerow is-pending"><span class="ox-stage-dot"></span><span class="ox-stagename">${name}</span><span class="ox-stagedur">pending</span></div>`;
+    const stateCls = s.state === 'Completed' ? 'is-completed' : s.state === 'Failed' ? 'is-failed' : s.state === 'Running' ? 'is-running' : s.state === 'Skipped' ? 'is-skip' : '';
+    const dot = s.state === 'Completed' ? 'ox-stage-dot--completed' : s.state === 'Failed' ? 'ox-stage-dot--failed' : s.state === 'Running' ? 'ox-stage-dot--running' : '';
+    const badgeCls = s.state === 'Completed' ? 'ox-badge--ok' : s.state === 'Failed' ? 'ox-badge--danger' : 'ox-badge--neutral';
+    return `<div class="ox-stagerow ${stateCls}">
       <span class="ox-stage-dot ${dot}"></span>
       <span class="ox-stagename">${name}</span>
-      <span class="ox-right"><span class="ox-badge ${s.state === 'Completed' ? 'ox-badge--ok' : s.state === 'Failed' ? 'ox-badge--danger' : 'ox-badge--neutral'}">${esc(s.state)}</span>
-      <span class="ox-muted ox-num" style="margin-left:8px">${s.elapsedSeconds != null ? Number(s.elapsedSeconds).toFixed(2) + 's' : ''}</span></span>
+      <span class="ox-badge ${badgeCls}">${esc(s.state)}</span>
+      <span class="ox-stagedur">${s.elapsedSeconds != null ? Number(s.elapsedSeconds).toFixed(2) + 's' : ''}</span>
     </div>`;
   }).join('')}</div>`;
 }
@@ -372,10 +373,10 @@ function quoteSection(q) {
       <div class="ox-right ox-muted" style="font-size:12px">${q.generationMode} · master ${esc(p.masterVersionRef || '—')}</div>
     </div>
     <div class="ox-kpi-row" style="margin-top:10px">
-      <div class="ox-kpi ox-kpi--primary"><div class="ox-mono-label">TECHNICAL PREMIUM</div><div class="ox-kpi-num">${inr(tech?.value ?? p.technicalPremium)}</div></div>
-      <div class="ox-kpi"><div class="ox-mono-label">GST 18%</div><div class="ox-kpi-num">${inr(gst?.value ?? 0)}</div></div>
-      <div class="ox-kpi ox-kpi--ok"><div class="ox-mono-label">TOTAL INCL. GST</div><div class="ox-kpi-num">${inr(total?.value ?? 0)}</div></div>
-      <div class="ox-kpi"><div class="ox-mono-label">GROSS-UP</div><div class="ox-kpi-num">${pct(gross?.value != null && tech?.value ? (gross.value / tech.value - 1) * 100 : null)}</div></div>
+      <div class="ox-kpi ox-kpi--primary"><div class="ox-money-label">TECHNICAL PREMIUM</div><div class="ox-money">${inr(tech?.value ?? p.technicalPremium)}</div><div class="ox-kpi-sub">ANNUAL · PRE-TAX</div></div>
+      <div class="ox-kpi"><div class="ox-money-label">GST 18%</div><div class="ox-money">${inr(gst?.value ?? 0)}</div><div class="ox-kpi-sub">CGST + SGST</div></div>
+      <div class="ox-kpi ox-kpi--ok"><div class="ox-money-label">TOTAL INCL. GST</div><div class="ox-money">${inr(total?.value ?? 0)}</div><div class="ox-kpi-sub is-up">PAYABLE</div></div>
+      <div class="ox-kpi"><div class="ox-money-label">GROSS-UP</div><div class="ox-money">${pct(gross?.value != null && tech?.value ? (gross.value / tech.value - 1) * 100 : null)}</div><div class="ox-kpi-sub">TPA LOAD</div></div>
     </div>
     <div class="ox-hr"></div>
     <div class="ox-mono-label">PRICING BRIDGE — OBSERVED BURN → TOTAL PREMIUM</div>
