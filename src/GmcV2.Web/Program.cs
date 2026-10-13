@@ -31,7 +31,12 @@ public static class Program
         ApiAdmin.MapAll(app);
         Pages.MapAll(app);
 
-        app.UseStaticFiles();
+        app.UseStaticFiles(new StaticFileOptions
+        {
+            // always revalidate: ETag/304 when unchanged, fresh bytes when deployed —
+            // prevents stale app.js breaking the console after releases
+            OnPrepareResponse = ctx => ctx.Context.Response.Headers["Cache-Control"] = "no-cache"
+        });
         app.Run();
         return 0;
     }

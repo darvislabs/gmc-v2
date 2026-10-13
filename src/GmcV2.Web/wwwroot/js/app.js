@@ -179,12 +179,14 @@ function openNewCaseDrawer() {
       <button class="ox-btn ox-btn--primary ox-btn--lg" type="submit" id="nc-submit">Create & run pipeline</button>
     </form>`;
   backdrop.classList.remove('ox-hide'); drawer.classList.remove('ox-hide');
+  requestAnimationFrame(() => { backdrop.classList.add('open'); drawer.classList.add('open'); });
   backdrop.onclick = closeDrawer;
   $('#nc-form').addEventListener('submit', submitNewCase);
 }
 function closeDrawer() {
-  $('#drawer-backdrop').classList.add('ox-hide');
-  $('#drawer').classList.add('ox-hide');
+  const b = $('#drawer-backdrop'), d = $('#drawer');
+  b.classList.remove('open'); d.classList.remove('open');
+  setTimeout(() => { b.classList.add('ox-hide'); d.classList.add('ox-hide'); }, 180);
 }
 
 async function submitNewCase(e) {
