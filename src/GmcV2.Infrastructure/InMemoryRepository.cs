@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Text;
 using GmcV2.Core;
 
 namespace GmcV2.Infrastructure;
@@ -351,6 +352,51 @@ public sealed class InMemoryRepository : IGmcRepository
     }
 
     // ─────────────────────────── quote versions ───────────────────────────
+
+    private readonly List<(long QuoteVersionId, string ArtifactType, string FileName, byte[] Content, string GeneratedBy, DateTime AtUtc)> _artifacts = new();
+    private long _artifactSeq = 0;
+
+    public Task AddQuoteArtifactAsync(long quoteVersionId, string artifactType, string fileName, byte[] content, string generatedBy)
+    {
+        lock (_gate)
+        {
+            _artifacts.Add((quoteVersionId, artifactType, fileName, content, generatedBy, DateTime.UtcNow));
+            _artifactSeq++;
+            return Task.CompletedTask;
+        }
+    }
+
+    public Task<List<QuoteArtifactInfo>> GetQuoteArtifactsAsync(long quoteVersionId)
+    {
+        lock (_gate)
+        {
+            var list = _artifacts
+                .Select((a, i) => (a, Id: i + 1))
+                .Where(x => x.a.QuoteVersionId == quoteVersionId)
+                .Select(x => new QuoteArtifactInfo
+                {
+                    QuoteArtifactId = x.Id,
+                    QuoteVersionId = x.a.QuoteVersionId,
+                    ArtifactType = x.a.ArtifactType,
+                    FileName = x.a.FileName,
+                    SizeBytes = x.a.Content.LongLength,
+                    GeneratedAtUtc = x.a.AtUtc,
+                    GeneratedBy = x.a.GeneratedBy,
+                })
+                .ToList<QuoteArtifactInfo>();
+            return Task.FromResult(list);
+        }
+    }
+
+    public Task<(string Type, string Content)?> GetQuoteArtifactContentAsync(long artifactId)
+    {
+        lock (_gate)
+        {
+            if (artifactId < 1 || artifactId > _artifacts.Count) return Task.FromResult<(string, string)?>(null);
+            var a = _artifacts[(int)artifactId - 1];
+            return Task.FromResult<(string, string)?>((a.ArtifactType, Encoding.UTF8.GetString(a.Content)));
+        }
+    }
 
     public Task<QuoteVersion> AddQuoteVersionAsync(QuoteVersion q)
     {

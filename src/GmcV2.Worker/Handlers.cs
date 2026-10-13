@@ -1,5 +1,7 @@
+using System.Text;
 using System.Text.Json;
 using GmcV2.Core;
+using GmcV2.Infrastructure;
 
 namespace GmcV2.Worker;
 
@@ -656,6 +658,21 @@ public static class StageHandlers
             // filtered unique index on SQL; supersede-in-lock on memory)
             await repo.AddQuoteVersionAsync(quote);
 
+            // ── artifact generation (workflow §13: "PDF, Excel pack and JSON generated") ──
+            try
+            {
+                var (json, csv, html) = QuoteArtifacts.Generate(c, quote);
+                var baseName = $"{c.CaseNumber}-V{quote.VersionNo}";
+                await repo.AddQuoteArtifactAsync(quote.QuoteVersionId, "json", baseName + ".quote.json", Encoding.UTF8.GetBytes(json), "Pipeline");
+                await repo.AddQuoteArtifactAsync(quote.QuoteVersionId, "csv", baseName + ".bridge.csv", Encoding.UTF8.GetBytes(csv), "Pipeline");
+                await repo.AddQuoteArtifactAsync(quote.QuoteVersionId, "html", baseName + ".quote.html", Encoding.UTF8.GetBytes(html), "Pipeline");
+            }
+            catch (Exception ex)
+            {
+                // artifacts are auxiliary — never fail the quote
+                Console.Error.WriteLine($"[AssembleQuote] artifact generation skipped: {ex.Message}");
+            }
+
             return new StageOutcome
             {
                 DetailJson = JsonSerializer.Serialize(new Dictionary<string, object?>
@@ -685,6 +702,12 @@ public static class StageHandlers
             // notification record via ops.Notification through the repo AddNoteAsync fallback
             await repo.AddNoteAsync(c.CaseId, "Pipeline",
                 $"Quote V{quote.VersionNo} published — status {status}, confidence {quote.Guardrails?.Confidence ?? 0}.");
+
+            // ── §12 notification fan-out (in-app) ──
+            if (status == Enums.CaseAutoQuoted)
+                await Notifier.CaseAutoQuoted(repo, c, quote);
+            else
+                await Notifier.CaseReferred(repo, c, quote);
 
             return new StageOutcome
             {

@@ -213,6 +213,24 @@ public static class Api
             return Results.Json(new { caseId = dto.CaseId, caseStatus = c.Status, action = dto.Action });
         });
 
+        // ── quote artifacts (download) ────────────────────────────────────────
+        app.MapGet("/api/v1/quotes/{qvId:long}/artifacts", async (long qvId, IGmcRepository repo) =>
+            Results.Json(await repo.GetQuoteArtifactsAsync(qvId)));
+
+        app.MapGet("/api/v1/quotes/{qvId:long}/artifacts/{artifactId:long}/content", async (long qvId, long artifactId, IGmcRepository repo) =>
+        {
+            var a = await repo.GetQuoteArtifactContentAsync(artifactId);
+            if (a is null) return Results.NotFound(new { error = "artifact not found" });
+            var mime = a.Value.Type switch
+            {
+                "json" => "application/json",
+                "csv" => "text/csv",
+                "html" => "text/html",
+                _ => "application/octet-stream",
+            };
+            return Results.Content(a.Value.Content, mime, System.Text.Encoding.UTF8);
+        });
+
         // ── notifications (in-app center, workflow §12) ──────────────────────
         app.MapGet("/api/v1/notifications", async (IGmcRepository repo, HttpContext ctx) =>
         {

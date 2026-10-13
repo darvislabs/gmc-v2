@@ -474,11 +474,81 @@ public sealed partial class SqlRepository : IGmcRepository
 
     // ─────────────────────────── quote versions ───────────────────────────
 
+    public async Task AddQuoteArtifactAsync(long quoteVersionId, string artifactType, string fileName, byte[] content, string generatedBy)
+    {
+        await using var conn = await OpenAsync();
+        using var cmd = Cmd(conn, """
+            INSERT uw.QuoteArtifact (QuoteVersionId, ArtifactType, StorageUri, FileName, SizeBytes, Sha256, GeneratedAtUtc, GeneratedBy)
+            VALUES (@qv, @type, @uri, @file, @size, @sha, SYSUTCDATETIME(), @by)
+            """);
+        cmd.Parameters.AddWithValue("@qv", quoteVersionId);
+        cmd.Parameters.AddWithValue("@type", artifactType);
+        cmd.Parameters.AddWithValue("@uri", "db://quoteartifacts/" + quoteVersionId + "/" + fileName);
+        cmd.Parameters.AddWithValue("@file", fileName);
+        cmd.Parameters.AddWithValue("@size", content.LongLength);
+        cmd.Parameters.AddWithValue("@sha", Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(content))[..32]);
+        cmd.Parameters.AddWithValue("@by", generatedBy);
+        await cmd.ExecuteNonQueryAsync();
+
+        // payload (read-back support)
+        using (var contentCmd = Cmd(conn, """
+            IF OBJECT_ID(N'uw.QuoteArtifactContent', N'U') IS NULL
+            CREATE TABLE uw.QuoteArtifactContent(
+                QuoteArtifactId BIGINT NOT NULL CONSTRAINT PK_QAC PRIMARY KEY,
+                Content NVARCHAR(MAX) NOT NULL);
+            """))
+            await contentCmd.ExecuteNonQueryAsync();
+        using (var ins = Cmd(conn, "INSERT uw.QuoteArtifactContent (QuoteArtifactId, Content) VALUES (SCOPE_IDENTITY(), @content)"))
+        {
+            ins.Parameters.AddWithValue("@content", Encoding.UTF8.GetString(content));
+            await ins.ExecuteNonQueryAsync();
+        }
+    }
+
+    public async Task<List<QuoteArtifactInfo>> GetQuoteArtifactsAsync(long quoteVersionId)
+    {
+        var list = new List<QuoteArtifactInfo>();
+        await using var conn = await OpenAsync();
+        using var cmd = Cmd(conn, "SELECT QuoteArtifactId, QuoteVersionId, ArtifactType, FileName, SizeBytes, Sha256, GeneratedAtUtc, GeneratedBy FROM uw.QuoteArtifact WHERE QuoteVersionId = @qv ORDER BY QuoteArtifactId");
+        cmd.Parameters.AddWithValue("@qv", quoteVersionId);
+        using var r = await cmd.ExecuteReaderAsync();
+        while (await r.ReadAsync())
+            list.Add(new QuoteArtifactInfo
+            {
+                QuoteArtifactId = L(r["QuoteArtifactId"]),
+                QuoteVersionId = L(r["QuoteVersionId"]),
+                ArtifactType = S(r["ArtifactType"]),
+                FileName = S(r["FileName"]),
+                SizeBytes = L(r["SizeBytes"]),
+                Sha256 = SN(r["Sha256"]),
+                GeneratedAtUtc = T(r["GeneratedAtUtc"]),
+                GeneratedBy = SN(r["GeneratedBy"]),
+            });
+        return list;
+    }
+
+    public async Task<(string Type, string Content)?> GetQuoteArtifactContentAsync(long artifactId)
+    {
+        // content lives in uw.QuoteArtifactContent (created on demand below)
+        await using var conn = await OpenAsync();
+        using (var ensure = Cmd(conn, """
+            IF OBJECT_ID(N'uw.QuoteArtifactContent', N'U') IS NULL
+            CREATE TABLE uw.QuoteArtifactContent(
+                QuoteArtifactId BIGINT NOT NULL CONSTRAINT PK_QAC PRIMARY KEY,
+                Content NVARCHAR(MAX) NOT NULL);
+            """))
+                await ensure.ExecuteNonQueryAsync();
+        using var cmd = Cmd(conn, "SELECT a.ArtifactType, c.Content FROM uw.QuoteArtifact a JOIN uw.QuoteArtifactContent c ON c.QuoteArtifactId = a.QuoteArtifactId WHERE a.QuoteArtifactId = @id");
+        cmd.Parameters.AddWithValue("@id", artifactId);
+        using var r = await cmd.ExecuteReaderAsync();
+        if (!await r.ReadAsync()) return null;
+        return (S(r["ArtifactType"]), S(r["Content"]));
+    }
+
     public async Task<QuoteVersion> AddQuoteVersionAsync(QuoteVersion q)
     {
         await using var conn = await OpenAsync();
         await using var tx = (SqlTransaction)await conn.BeginTransactionAsync();
-
         // QuoteNo: GMC-Q-{FY}-{seq}-V{n}, FY taken from the case number.
         var caseRow = Cmd(conn, "SELECT CaseNo FROM core.[Case] WHERE CaseId = @id");
         caseRow.Transaction = tx;

@@ -35,6 +35,9 @@ public interface IGmcRepository
 
     // Quote versions
     Task<QuoteVersion> AddQuoteVersionAsync(QuoteVersion q);
+    Task AddQuoteArtifactAsync(long quoteVersionId, string artifactType, string fileName, byte[] content, string generatedBy);
+    Task<List<QuoteArtifactInfo>> GetQuoteArtifactsAsync(long quoteVersionId);
+    Task<(string Type, string Content)?> GetQuoteArtifactContentAsync(long artifactId);
     Task<List<QuoteVersion>> GetQuoteVersionsAsync(long caseId);
     Task<QuoteVersion?> GetCurrentQuoteVersionAsync(long caseId);
     Task SupersedeQuoteVersionAsync(long caseId, int newVersionId);

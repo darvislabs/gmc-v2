@@ -8,6 +8,7 @@ namespace GmcV2.Worker;
 public static class WorkerCli
 {
     public static IReadOnlyList<(string Name, string Group, string Icd, bool Chronic, string[] Keywords)> DemoDiseases => Program.DemoDiseases;
+    public static Task SeedDemoReferenceData(IGmcRepository repo) => Program.SeedDemoReferenceData(repo);
 }
 
 /// <summary>
@@ -75,6 +76,11 @@ public static class Program
             });
     }
 
+    internal static async Task SeedDemoReferenceData(IGmcRepository repo)
+    {
+        await SeedDiseasesAsync(repo);
+        await EnsureDemoMasterAsync(repo);
+    }
     private static IGmcRepository BuildRepo(bool useSql)
     {
         if (useSql)
