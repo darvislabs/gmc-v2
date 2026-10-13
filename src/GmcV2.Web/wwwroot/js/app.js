@@ -305,6 +305,7 @@ async function viewCase(id) {
         }
       }
       btn.textContent = 'Running pipeline…';
+      await startPipeline(id);
       route();
     } catch (ex) {
       btn.disabled = false; btn.textContent = 'Upload & run';
