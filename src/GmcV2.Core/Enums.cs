@@ -118,4 +118,12 @@ public static class Enums
         [BizRenewalInternal] = new[] { "ClaimsRegister", "Enrollment" },
         [BizRenewalExternal] = new[] { "ClaimsRegister", "Enrollment", "ExpiringPolicy", "Rfq" },
     };
+
+    // ─── Roles (workflow §3) ───
+    public const string RoleSalesAgent = "SalesAgent";
+    public const string RoleUnderwriter = "Underwriter";
+    public const string RoleSeniorUW = "SeniorUnderwriter";
+    public const string RoleVP = "VicePresident";
+    public const string RoleAdmin = "Admin";
+    public static readonly string[] Roles = { RoleSalesAgent, RoleUnderwriter, RoleSeniorUW, RoleVP, RoleAdmin };
 }

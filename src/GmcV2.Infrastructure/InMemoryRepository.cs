@@ -10,6 +10,19 @@ namespace GmcV2.Infrastructure;
 /// </summary>
 public sealed class InMemoryRepository : IGmcRepository
 {
+    private readonly InMemoryUserStore _userStore = new();
+
+    public Task<User?> GetUserByEmailAsync(string email) => _userStore.GetUserByEmailAsync(email);
+    public Task<User?> GetUserAsync(long userId) => _userStore.GetUserAsync(userId);
+    public Task<User> AddUserAsync(User u) => _userStore.AddUserAsync(u);
+    public Task UpdateUserAsync(User u) => _userStore.UpdateUserAsync(u);
+    public Task<List<User>> ListUsersAsync() => _userStore.ListUsersAsync();
+    public Task UpdateLastLoginAsync(long userId) => _userStore.UpdateLastLoginAsync(userId);
+    public Task AddNotificationAsync(Notification n) => _userStore.AddNotificationAsync(n);
+    public Task<List<Notification>> GetNotificationsAsync(string? role, long? userId, bool unreadOnly = false) => _userStore.GetNotificationsAsync(role, userId, unreadOnly);
+    public Task MarkNotificationReadAsync(long notificationId) => _userStore.MarkNotificationReadAsync(notificationId);
+    public Task<int> MarkAllNotificationsReadAsync(string? role, long? userId) => _userStore.MarkAllNotificationsReadAsync(role, userId);
+
     private readonly object _gate = new();
 
     private long _caseSeq;

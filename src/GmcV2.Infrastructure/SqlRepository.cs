@@ -12,7 +12,7 @@ namespace GmcV2.Infrastructure;
 /// JSON columns (DetailJson, MetricsJson, ComponentsJson, ...) are
 /// serialized with System.Text.Json.
 /// </summary>
-public sealed class SqlRepository : IGmcRepository
+public sealed partial class SqlRepository : IGmcRepository
 {
     private readonly string _connectionString;
     private static readonly JsonSerializerOptions JsonOpts = new(JsonSerializerDefaults.Web);

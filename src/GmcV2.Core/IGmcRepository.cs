@@ -70,4 +70,16 @@ public interface IGmcRepository
 
     // Reference
     Task<Dictionary<string, string>> GetPaidStatusMapAsync();
+
+    // ── users + notifications (workflow §3, §12) ──
+    Task<User?> GetUserByEmailAsync(string email);
+    Task<User?> GetUserAsync(long userId);
+    Task<User> AddUserAsync(User u);
+    Task UpdateUserAsync(User u);
+    Task<List<User>> ListUsersAsync();
+    Task UpdateLastLoginAsync(long userId);
+    Task AddNotificationAsync(Notification n);
+    Task<List<Notification>> GetNotificationsAsync(string? role, long? userId, bool unreadOnly = false);
+    Task MarkNotificationReadAsync(long notificationId);
+    Task<int> MarkAllNotificationsReadAsync(string? role, long? userId);
 }
