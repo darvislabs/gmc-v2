@@ -200,7 +200,7 @@ async function submitNewCase(e) {
       if (inp?.files?.[0]) {
         const fd = new FormData();
         fd.append('file', inp.files[0]); fd.append('docType', dt);
-        const r = await fetch(`/api/v1/cases/${c.caseId}/documents`, { method: 'POST', body: fd, credentials: 'same-origin' });
+        const r = await fetch(`/api/v1/cases/${c.caseId}/documents/upload`, { method: 'POST', body: fd, credentials: 'same-origin' });
         if (!r.ok) throw new Error(`${dt} upload failed: ${r.status}`);
       }
     }
