@@ -850,11 +850,11 @@ html[data-theme="light"] .ox-topbar { background: #FFFFFF; }
 .ox-login-btn { margin-top: 10px; width: 100%; }
 .ox-chip-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
 
-/* drawer (new case) */
+/* drawer (new case) — layout-only overrides; z-index/transform live in the main
+   .ox-drawer rule above (drawer 100 > backdrop 90, so the blur never hits the drawer) */
 .ox-drawer {
-    position: fixed; top: 0; right: 0; bottom: 0; width: 440px; max-width: 100vw;
-    background: var(--ox-surface); border-left: 1px solid var(--ox-border);
-    z-index: 70; padding: 24px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px;
+    width: 440px; max-width: 100vw;
+    padding: 24px; overflow-y: auto; gap: 8px;
 }
 .ox-drawer .ox-field { margin-bottom: 10px; display: flex; flex-direction: column; gap: 4px; }
 .ox-drawer input[type="file"] { color: var(--ox-text-3); }

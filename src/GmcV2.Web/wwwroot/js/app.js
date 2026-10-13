@@ -28,12 +28,15 @@ const isAdmin = () => ME?.role === 'Admin';
 
 // ── badges ─────────────────────────────────────────────────────────────────
 function badge(status) {
+  return `<span class="ox-badge ${badgeClass(status)}">${esc(status)}</span>`;
+}
+function badgeClass(status) {
   const map = {
     AutoQuoted: 'ox-badge--ok', Approved: 'ox-badge--electric', ApprovedWithChanges: 'ox-badge--electric',
     ReferredToUW: 'ox-badge--warn', ExceptionPending: 'ox-badge--danger', Declined: 'ox-badge--danger',
     Processing: 'ox-badge--vivid', AwaitingDocuments: 'ox-badge--neutral', Draft: 'ox-badge--neutral',
   };
-  return `<span class="ox-badge ${map[status] || 'ox-badge--neutral'}">${esc(status)}</span>`;
+  return map[status] || 'ox-badge--neutral';
 }
 function sevBadge(sev) {
   const map = { Blocking: 'ox-badge--danger', Advisory: 'ox-badge--neutral', HardStop: 'ox-badge--danger', Refer: 'ox-badge--warn', NotApplicable: 'ox-badge--neutral' };
@@ -92,7 +95,10 @@ const routes = {
 async function route() {
   const hash = location.hash || '#/';
   const parts = hash.slice(2).split('/');
-  if (parts[0] === 'case' && parts[1]) return viewCase(parts[1]);
+  if (parts[0] === 'case' && parts[1]) {
+    try { return await viewCase(parts[1]); }
+    catch (e) { $('#view').innerHTML = `<div class="ox-banner ox-banner--error">Failed to load case: ${esc(e.message)}</div>`; return; }
+  }
   const view = routes[hash] || viewCases;
   setActiveNav();
   try { await view(); } catch (e) { $('#view').innerHTML = `<div class="ox-banner ox-banner--error">Failed to load: ${esc(e.message)}</div>`; }
@@ -214,8 +220,18 @@ async function submitNewCase(e) {
   }
 }
 
+// required docs per business type (mirror of Enums.RequiredDocuments)
+const REQUIRED_DOCS = {
+  'Rollover': ['ClaimsRegister', 'Enrollment', 'ExpiringPolicy', 'Rfq'],
+  'Fresh': ['Enrollment', 'Rfq'],
+  'Renewal-Internal': ['ClaimsRegister', 'Enrollment'],
+  'Renewal-External': ['ClaimsRegister', 'Enrollment', 'ExpiringPolicy', 'Rfq'],
+};
+
 // ── view: case detail ──────────────────────────────────────────────────────
 async function viewCase(id) {
+  id = String(id).split('?')[0];          // '#/case/29?run=1' → '29'
+  if (!/^\d+$/.test(id)) { $('#view').innerHTML = '<div class="ox-banner ox-banner--error">Invalid case reference.</div>'; return; }
   $('#pagetitle').textContent = 'Case ' + id;
   $('#view').innerHTML = '<div class="ox-skeleton" style="height:220px"></div>';
   const c = await api(`/api/v1/cases/${id}`);
@@ -225,6 +241,9 @@ async function viewCase(id) {
     api(`/api/v1/cases/${id}/quotes`).catch(() => []),
   ]);
   const quote = quotes.filter(q => q.status === 'Current').at(-1) || quotes.at(-1);
+  const required = REQUIRED_DOCS[c.businessType] || [];
+  const have = new Set(docs.map(d => d.docType));
+  const missing = required.filter(dt => !have.has(dt));
   const runParam = new URLSearchParams(location.hash.split('?')[1] || '');
   const shouldRun = runParam.get('run') === '1' && (c.status === 'Draft' || c.status === 'AwaitingDocuments');
 
@@ -244,8 +263,19 @@ async function viewCase(id) {
       <div class="ox-card">
         <div class="ox-mono-label">PIPELINE — 13 STAGES</div>
         <div id="stages">${stageTimeline(stages)}</div>
-        ${c.status === 'AwaitingDocuments' ? '<div class="ox-banner ox-banner--info">Awaiting documents — pipeline starts automatically when required docs are parsed.</div>' : ''}
-        ${c.status === 'Draft' ? '<button class="ox-btn ox-btn--primary" id="run-pipeline" style="margin-top:10px">Run pipeline</button>' : ''}
+        ${missing.length ? `
+          <div class="ox-banner ox-banner--info">
+            <strong>Awaiting documents</strong> — pipeline starts when all required docs are parsed.
+            <div style="margin-top:8px">
+              ${missing.map(dt => `
+                <div class="ox-field" style="margin:6px 0">
+                  <span class="ox-mono-label" style="color:var(--ox-warn,#EAA40E)">MISSING: ${dt.replace(/([a-z])([A-Z])/g,'$1 $2').toUpperCase()}</span>
+                  <input class="ox-input" type="file" id="cd-file-${dt}" accept=".xlsx,.csv,.pdf,.txt">
+                </div>`).join('')}
+              <button class="ox-btn ox-btn--primary" id="cd-upload" style="margin-top:6px">Upload & run</button>
+            </div>
+          </div>` : ''}
+        ${c.status === 'Draft' && !missing.length ? '<button class="ox-btn ox-btn--primary" id="run-pipeline" style="margin-top:10px">Run pipeline</button>' : ''}
       </div>
       <div class="ox-card">
         <div class="ox-mono-label">DOCUMENTS (${docs.length})</div>
@@ -259,6 +289,28 @@ async function viewCase(id) {
 
   const runBtn = $('#run-pipeline');
   if (runBtn) runBtn.addEventListener('click', () => startPipeline(id));
+
+  // case-page upload for missing required docs → upload all, then run pipeline
+  const upBtn = $('#cd-upload');
+  if (upBtn) upBtn.addEventListener('click', async () => {
+    const btn = upBtn; btn.disabled = true; btn.textContent = 'Uploading…';
+    try {
+      for (const dt of missing) {
+        const inp = $(`#cd-file-${dt}`);
+        if (inp?.files?.[0]) {
+          const fd = new FormData();
+          fd.append('file', inp.files[0]); fd.append('docType', dt);
+          const r = await fetch(`/api/v1/cases/${id}/documents/upload`, { method: 'POST', body: fd, credentials: 'same-origin' });
+          if (!r.ok) throw new Error(`${dt} upload failed: ${r.status}`);
+        }
+      }
+      btn.textContent = 'Running pipeline…';
+      route();
+    } catch (ex) {
+      btn.disabled = false; btn.textContent = 'Upload & run';
+      alert(ex.message);
+    }
+  });
   if (shouldRun || runBtn) startPipeline(id, { quiet: !runBtn });
   if (quote) renderDecisions(id, quote);
 }
@@ -292,6 +344,9 @@ async function startPipeline(id, { quiet = false } = {}) {
     const qs = $('#quote-section');
     const quote = quotes.filter(q => q.status === 'Current').at(-1) || quotes.at(-1);
     if (qs && quote) { qs.innerHTML = quoteSection(quote); renderDecisions(id, quote); }
+    // refresh the status badge + case header from the post-run case object
+    const badgeEl = $('#view .ox-card .ox-right .ox-badge');
+    if (badgeEl && c?.status) { badgeEl.textContent = c.status; badgeEl.className = 'ox-badge ' + badgeClass(c.status); }
     refreshBell();
   } catch (ex) {
     const se = $('#stages');
