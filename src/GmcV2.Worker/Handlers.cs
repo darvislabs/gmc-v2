@@ -431,12 +431,22 @@ public static class StageHandlers
             // deterministic fallback (unmapped++). Demo data matches deterministically,
             // so AI is never invoked on the pinned demo path.
             var clinical = _ai?.Clinical is { IsAvailable: true } ? _ai.Clinical : null;
+            // Tier-1.5: the golden dataset (human-confirmed diagnosis→ICD pairs, Phase 5)
+            var golden = (await repo.GetGoldenEntriesAsync()).ToList();
 
             foreach (var claim in claims)
             {
                 var diseaseText = claim.DiseaseCategory ?? "";
                 var match = diseases.FirstOrDefault(d => d.DiseaseName.Equals(diseaseText, StringComparison.OrdinalIgnoreCase)
                     || d.MatchKeywords.Any(k => diseaseText.Contains(k, StringComparison.OrdinalIgnoreCase)));
+                // Tier-1.5 golden lookup: exact normalized hit beats the master's keyword fallback
+                if (match is null && golden.Count > 0)
+                {
+                    var norm = diseaseText.Trim().ToLowerInvariant().Replace(" ", "");
+                    var g = golden.FirstOrDefault(x => x.RawTextNorm.Replace(" ", "").Equals(norm, StringComparison.OrdinalIgnoreCase));
+                    if (g is not null)
+                        match = diseases.FirstOrDefault(d => string.Equals(d.IcdLevel1, g.IcdLevel1, StringComparison.OrdinalIgnoreCase));
+                }
                 if (match is null && clinical is not null && !string.IsNullOrWhiteSpace(diseaseText))
                 {
                     var (aiCode, _, aiConf, _) = await TryCodeAsync(clinical, diseaseText, diseases);
