@@ -13,7 +13,7 @@ public sealed class GuardrailEngine
     public GuardrailEngine() { }
 
     public static GuardrailResult Evaluate(AnalyticsSnapshot snap, List<GuardrailRuleDef> rules,
-        decimal dqScore, decimal mappingConfidence, string businessType)
+        decimal dqScore, decimal mappingConfidence, string businessType, GuardrailExtras? extras = null)
     {
         var experienceDependent = businessType is "Rollover" or "Renewal-External" or "Renewal-Internal";
         var evals = new List<GuardrailEvaluation>();
@@ -55,6 +55,12 @@ public sealed class GuardrailEngine
                 "MaternitySharePct" => snap.MaternitySharePct,
                 "NonNetworkSharePct" => snap.NonNetworkSharePct,
                 "RatePerLifeBeforeGst" => ratePerLife,
+                // prototype §6 extended selectors (need schedule/context data)
+                "PedCostSharePct" => extras?.PedCostSharePct ?? 0m,
+                "DiseaseGroupConcentrationPct" => extras?.DiseaseGroupConcentrationPct ?? 0m,
+                "SiIncreasePct" => extras?.SiIncreasePct ?? 0m,
+                "BenefitDeltaPct" => extras?.BenefitDeltaPct ?? 0m,
+                "NonStandardBenefitCount" => extras?.NonStandardBenefitCount ?? 0,
                 _ => 0m,
             };
             var passed = rule.Operator switch

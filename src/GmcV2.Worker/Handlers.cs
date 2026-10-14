@@ -734,7 +734,8 @@ public static partial class StageHandlers
                     AppliesToExperienceBusiness = true,
                 });
 
-            var result = EngineBridge.EvaluateGuardrails(snapshot, rules, data.DataQualityScore, data.MappingConfidence, c.BusinessType);
+            var extras = GmcV2.Calculation.GuardrailExtras.From(snapshot, data.Expiring, data.Proposed);
+            var result = EngineBridge.EvaluateGuardrails(snapshot, rules, data.DataQualityScore, data.MappingConfidence, c.BusinessType, extras);
             DemoPipelineData.LastGuardrailResult = result;
 
             var outcome = new StageOutcome

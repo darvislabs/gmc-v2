@@ -261,7 +261,7 @@ public class WorkerSmoke
 
         Assert.Equal(master1.MasterVersionId, master2.MasterVersionId);
         Assert.Equal(rules1.Count, rules2.Count);
-        Assert.Equal(15, rules2.Count);
+        Assert.Equal(20, rules2.Count);
         Assert.Equal(17, (await repo.GetPaidStatusMapAsync()).Count);
     }
 }

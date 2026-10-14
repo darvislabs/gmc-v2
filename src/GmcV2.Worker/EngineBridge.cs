@@ -171,7 +171,7 @@ public static class EngineBridge
     // ─────────── guardrails (local fallback, rule-for-rule INFRA seed set) ───────────
 
     public static GuardrailResult EvaluateGuardrails(AnalyticsSnapshot snap, List<GuardrailRuleDef> rules,
-        decimal dqScore, decimal mappingConf, string businessType)
+        decimal dqScore, decimal mappingConf, string businessType, GmcV2.Calculation.GuardrailExtras? extras = null)
     {
         var real = _bound.Value.Guardrail;
         if (real is not null)
@@ -180,7 +180,7 @@ public static class EngineBridge
             {
                 if (!m.Name.Contains("Evaluate", StringComparison.OrdinalIgnoreCase)) continue;
                 var ps = m.GetParameters();
-                if (ps.Length is < 3 or > 5) continue;
+                if (ps.Length is < 3 or > 6) continue;
                 try
                 {
                     object?[]? args = ps.Length switch
@@ -188,6 +188,7 @@ public static class EngineBridge
                         3 => new object?[] { snap, rules, dqScore },
                         4 => new object?[] { snap, rules, dqScore, mappingConf },
                         5 => new object?[] { snap, rules, dqScore, mappingConf, businessType },
+                        6 => new object?[] { snap, rules, dqScore, mappingConf, businessType, extras },
                         _ => null,
                     };
                     if (args is null) continue;
