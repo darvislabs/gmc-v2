@@ -1046,11 +1046,12 @@ async function viewAdmin() {
   if (!isAdmin()) { $('#view').innerHTML = '<div class="ox-banner ox-banner--error">Admins only.</div>'; return; }
   $('#pagetitle').textContent = 'Admin';
   $('#view').innerHTML = '<div class="ox-skeleton" style="height:200px"></div>';
-  const [stats, masters, ai, audit] = await Promise.all([
+  const [stats, masters, ai, audit, rules] = await Promise.all([
     api('/api/v1/admin/stats').catch(() => null),
     api('/api/v1/admin/masters').catch(() => []),
     api('/api/v1/admin/ai-status').catch(() => null),
     api('/api/v1/admin/audit?limit=50').catch(() => []),
+    api('/api/v1/admin/guardrail-rules').catch(() => []),
   ]);
 
   const masterRows = (masters || []).map(m => `
@@ -1087,9 +1088,32 @@ async function viewAdmin() {
       </div>
     </div>
     <div class="ox-card" style="margin-top:16px">
+      <div class="ox-mono-label">GUARDRAIL RULE CONFIGURATOR — ${rules.length} RULES</div>
+      <div class="ox-table-wrap" style="margin-top:10px"><table class="ox-table">
+        <thead><tr><th>Code</th><th>Category</th><th>Metric</th><th>Rule</th><th>Severity</th><th>Enabled</th></tr></thead>
+        <tbody>${rules.map(r => `
+          <tr>
+            <td class="ox-mono">${esc(r.ruleCode)}</td>
+            <td>${esc(r.category)}</td>
+            <td class="ox-mono" style="font-size:11px">${esc(r.metricSelector)}</td>
+            <td style="font-size:12px">${esc(r.operator)} ${r.threshold} — ${esc((r.messageTemplate || '').slice(0, 60))}…</td>
+            <td><span class="ox-badge ${r.severity === 'HardStop' ? 'ox-badge--error' : 'ox-badge--warn'}">${esc(r.severity)}</span></td>
+            <td><button class="ox-btn ox-btn--sm" data-rule="${esc(r.ruleCode)}" style="${r.isEnabled ? '' : 'opacity:.5'}">${r.isEnabled ? 'ON' : 'OFF'}</button></td>
+          </tr>`).join('')}</tbody>
+      </table></div>
+      <p class="ox-muted" style="font-size:12px">Rules are data — edits apply on the next pipeline run. Toggle to disable a rule without deleting it.</p>
+    </div>
+    <div class="ox-card" style="margin-top:16px">
       <div class="ox-mono-label">AUDIT LOG (LAST 50)</div>
       ${auditRows ? `<div class="ox-table-wrap"><table class="ox-table"><thead><tr><th>When</th><th>Entity</th><th>Action</th><th>Actor</th></tr></thead><tbody>${auditRows}</tbody></table></div>` : '<p class="ox-muted">No audit entries yet.</p>'}
     </div>`;
+  $('#view').querySelectorAll('[data-rule]').forEach(b => b.addEventListener('click', async () => {
+    try {
+      const res = await post(`/api/v1/admin/guardrail-rules/${b.dataset.rule}/toggle`, {});
+      if (res.error) throw new Error(res.error);
+      route();
+    } catch (ex) { alert('Toggle failed: ' + ex.message); }
+  }));
 }
 
 // ── view: about ────────────────────────────────────────────────────────────
