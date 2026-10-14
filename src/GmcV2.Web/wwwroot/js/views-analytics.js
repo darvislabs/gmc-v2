@@ -148,3 +148,153 @@ async function renderBenefitsPanel(caseId) {
     </div>
   </div>` : ''}`;
 }
+
+// ── Final Quote (prototype §9): commission + discount + versions + decision ─
+async function viewFinalQuote() {
+  if (!canDecide()) { $('#view').innerHTML = '<div class="ox-banner ox-banner--error">Underwriters only.</div>'; return; }
+  $('#pagetitle').textContent = 'Final Quote';
+  $('#view').innerHTML = '<div class="ox-skeleton" style="height:200px"></div>';
+  const cases = await api('/api/v1/cases');
+  const wantCase = new URLSearchParams(location.hash.split('?')[1] || '').get('case');
+  const sel = wantCase ?? cases[0]?.caseId;
+  if (!sel) { $('#view').innerHTML = '<div class="ox-empty-state"><p class="ox-mb-0">No cases yet.</p></div>'; return; }
+  $('#view').innerHTML = `
+    <div class="ox-row ox-row--between ox-row--wrap" style="margin-bottom:12px;gap:8px">
+      <select class="ox-select" id="fq-case" style="max-width:420px">${cases.map(c =>
+        `<option value="${c.caseId}" ${String(c.caseId) === String(sel) ? 'selected' : ''}>${esc(c.caseNumber)} — ${esc(c.clientName)} (${esc(c.status)})</option>`).join('')}</select>
+      <a class="ox-btn ox-btn--sm" href="#/case/${sel}">Full case →</a>
+    </div>
+    <div id="fq-panel"></div>`;
+  $('#fq-case').addEventListener('change', () => { location.hash = `#/quote?case=${$('#fq-case').value}`; });
+  renderFinalQuotePanel(sel);
+}
+
+async function renderFinalQuotePanel(caseId) {
+  const el = $('#fq-panel');
+  el.innerHTML = '<div class="ox-skeleton" style="height:160px"></div>';
+  let d;
+  try { d = await api(`/api/v1/cases/${caseId}/final-quote`); } catch (ex) {
+    el.innerHTML = `<div class="ox-banner ox-banner--error">${esc(ex.message)}</div>`; return;
+  }
+  const money = (v) => v == null ? '—' : inr(v);
+  el.innerHTML = `
+  ${d.current ? `
+  <div class="ox-kpis" style="margin-bottom:14px">
+    ${[['CURRENT VERSION', 'V' + d.current.versionNo], ['TECHNICAL PREMIUM', money(d.current.technicalPremium)],
+       ['GROSS PREMIUM', money(d.current.grossPremium)], ['NET PREMIUM', money(d.current.netPremium)],
+       ['CASE STATUS', d.status]]
+      .map(([k, v]) => `<div class="ox-kpi"><div class="ox-mono-label">${k}</div><div class="ox-num">${esc(v)}</div></div>`).join('')}
+  </div>` : '<div class="ox-banner ox-banner--warn">No quote yet — run the pipeline.</div>'}
+  <div class="ox-grid-2" style="gap:14px">
+    <div class="ox-card">
+      <div class="ox-mono-label">SALES COMMISSION SCHEDULE</div>
+      <div class="ox-table-wrap" style="margin-top:10px">
+        <table class="ox-table">
+          <thead><tr><th>Channel</th><th>Default</th><th>Band</th></tr></thead>
+          <tbody>${(d.commission || []).map((c) => `
+            <tr><td>${esc(c.channelType || c.Item1)}</td>
+            <td class="ox-num">${pct(c.defaultRatePct ?? c.Item2)}</td>
+            <td class="ox-num">${pct(c.minRatePct ?? c.Item3)} – ${pct(c.maxRatePct ?? c.Item4)}</td></tr>`).join('') || '<tr><td colspan="3" class="ox-muted">—</td></tr>'}</tbody>
+        </table>
+      </div>
+    </div>
+    <div class="ox-card">
+      <div class="ox-mono-label">COMMERCIAL DISCOUNT — REQUESTS & DECISIONS</div>
+      <div style="margin-top:10px">${(d.discounts || []).map((r) => `
+        <div class="ox-ana-row"><span class="ox-muted">${r.requestedPct}% · ${esc(r.justificationType || '')} · ${esc(r.status)}</span>
+        <span class="ox-num">${r.approvedPct != null ? '→ ' + r.approvedPct + '%' : 'pending'}</span></div>`).join('') || '<p class="ox-muted">No discount requests.</p>'}
+      </div>
+    </div>
+  </div>
+  <div class="ox-card" style="margin-top:14px">
+    <div class="ox-mono-label">QUOTE VERSIONS — FULL CHAIN</div>
+    <div class="ox-table-wrap" style="margin-top:10px">
+      <table class="ox-table">
+        <thead><tr><th>V</th><th>Status</th><th>Technical</th><th>Gross</th><th>Net</th><th>By</th><th>When</th></tr></thead>
+        <tbody>${(d.quotes || []).map((q) => `
+          <tr><td class="ox-num">V${q.versionNo}</td>
+          <td><span class="ox-badge ${q.status === 'Current' ? 'ox-badge--ok' : ''}">${esc(q.status)}</span></td>
+          <td class="ox-num">${money(q.technicalPremium)}</td>
+          <td class="ox-num">${money(q.grossPremium)}</td>
+          <td class="ox-num">${money(q.netPremium)}</td>
+          <td class="ox-muted">${esc(q.createdBy || '')}</td>
+          <td class="ox-muted">${new Date(q.createdAtUtc).toLocaleString()}</td></tr>`).join('') || '<tr><td colspan="7" class="ox-muted">—</td></tr>'}</tbody>
+      </table>
+    </div>
+  </div>
+  ${(d.artifacts || []).length ? `
+  <div class="ox-card" style="margin-top:14px">
+    <div class="ox-mono-label">QUOTE ARTIFACTS</div>
+    <div class="ox-table-wrap" style="margin-top:10px">
+      <table class="ox-table">
+        <thead><tr><th>Type</th><th>File</th><th>By</th><th>When</th></tr></thead>
+        <tbody>${d.artifacts.map((a) => `
+          <tr><td>${esc(a.artifactType)}</td><td>${esc(a.fileName)}</td>
+          <td class="ox-muted">${esc(a.generatedBy || '')}</td>
+          <td class="ox-muted">${new Date(a.generatedAtUtc).toLocaleString()}</td></tr>`).join('')}</tbody>
+      </table>
+    </div>
+  </div>` : ''}`;
+}
+
+// ── Standardize & Validate (prototype §3) ───────────────────────────────────
+async function viewStandardize() {
+  if (!canDecide()) { $('#view').innerHTML = '<div class="ox-banner ox-banner--error">Underwriters only.</div>'; return; }
+  $('#pagetitle').textContent = 'Standardize & Validate';
+  $('#view').innerHTML = '<div class="ox-skeleton" style="height:200px"></div>';
+  const cases = await api('/api/v1/cases');
+  const wantCase = new URLSearchParams(location.hash.split('?')[1] || '').get('case');
+  const sel = wantCase ?? cases[0]?.caseId;
+  if (!sel) { $('#view').innerHTML = '<div class="ox-empty-state"><p class="ox-mb-0">No cases yet.</p></div>'; return; }
+  $('#view').innerHTML = `
+    <div class="ox-row ox-row--between ox-row--wrap" style="margin-bottom:12px;gap:8px">
+      <select class="ox-select" id="std-case" style="max-width:420px">${cases.map(c =>
+        `<option value="${c.caseId}" ${String(c.caseId) === String(sel) ? 'selected' : ''}>${esc(c.caseNumber)} — ${esc(c.clientName)} (${esc(c.status)})</option>`).join('')}</select>
+    </div>
+    <div id="std-panel"></div>`;
+  $('#std-case').addEventListener('change', () => { location.hash = `#/standardize?case=${$('#std-case').value}`; });
+  renderStandardizePanel(sel);
+}
+
+async function renderStandardizePanel(caseId) {
+  const el = $('#std-panel');
+  el.innerHTML = '<div class="ox-skeleton" style="height:160px"></div>';
+  let d;
+  try { d = await api(`/api/v1/cases/${caseId}/standardize`); } catch (ex) {
+    el.innerHTML = `<div class="ox-banner ox-banner--error">${esc(ex.message)}</div>`; return;
+  }
+  if (!d.computed) { el.innerHTML = `<div class="ox-banner ox-banner--warn">${esc(d.message || 'Run the pipeline first.')}</div>`; return; }
+  const check = (label, ok, detail) => `
+    <div class="ox-ana-row"><span class="ox-muted">${esc(label)}</span>
+    <span class="ox-num">${ok ? '<span class="ox-badge ox-badge--ok">PASS</span>' : '<span class="ox-badge ox-badge--warn">CHECK</span>'} <span class="ox-muted">${esc(detail)}</span></span></div>`;
+  el.innerHTML = `
+  <div class="ox-kpis" style="margin-bottom:14px">
+    ${[['MEMBERS', d.members], ['CLAIMS', d.claims], ['DQ SCORE', d.dqScore != null ? (d.dqScore * 100).toFixed(0) + '%' : '—'],
+       ['MAPPING CONF', d.mappingConfidence != null ? (d.mappingConfidence * 100).toFixed(0) + '%' : '—']]
+      .map(([k, v]) => `<div class="ox-kpi"><div class="ox-mono-label">${k}</div><div class="ox-num">${esc(v)}</div></div>`).join('')}
+  </div>
+  <div class="ox-grid-2" style="gap:14px">
+    <div class="ox-card">
+      <div class="ox-mono-label">VALIDATION CHECKS</div>
+      <div class="ox-ana" style="margin-top:10px">
+        ${[['Member↔claim linkage', d.linkagePct != null, d.linkagePct != null ? (d.linkagePct).toFixed(0) + '%' : '—'],
+           ['Claim status codes', true, d.paidClaims + ' paid / ' + (d.outstandingClaims || 0) + ' outstanding'],
+           ['Age bands populated', d.ageBandsPopulated, (d.ageBandsPopulated ? 'all' : 'partial')],
+           ['SI populated on members', d.siPopulated, d.siPopulated ? 'yes' : 'missing — defaults applied']]
+          .map(([l, ok, det]) => check(l, ok, det)).join('')}
+      </div>
+    </div>
+    <div class="ox-card">
+      <div class="ox-mono-label">NORMALIZED PREVIEW — FIRST CLAIMS</div>
+      <div class="ox-table-wrap" style="margin-top:10px">
+        <table class="ox-table">
+          <thead><tr><th>Claim</th><th>Member</th><th>Status</th><th>Paid ₹</th><th>Diagnosis</th></tr></thead>
+          <tbody>${(d.preview || []).map((r) => `
+            <tr><td>${esc(r.claimNumber)}</td><td>${esc(r.memberNumber || '—')}</td>
+            <td>${esc(r.claimStatus)}</td><td class="ox-num">${inr(r.paidAmount)}</td>
+            <td class="ox-muted">${esc((r.diagnosisText || '').slice(0, 40))}</td></tr>`).join('') || '<tr><td colspan="5" class="ox-muted">—</td></tr>'}</tbody>
+        </table>
+      </div>
+    </div>
+  </div>`;
+}

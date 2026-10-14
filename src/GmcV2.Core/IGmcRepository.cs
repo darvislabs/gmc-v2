@@ -61,6 +61,7 @@ public interface IGmcRepository
     Task<DiscountRequestRow> SaveDiscountRequestAsync(DiscountRequestRow row);
     Task<List<DiscountRequestRow>> GetDiscountRequestsAsync(long caseId);
     Task<DiscountRequestRow?> GetDiscountRequestAsync(long id);
+    Task<List<(string ChannelType, decimal DefaultRatePct, decimal MinRatePct, decimal MaxRatePct)>> GetCommissionScheduleAsync();
 
     // Analytics persistence (prototype §5)
     Task<long> SaveAnalyticsSnapshotAsync(long caseId, AnalyticsSnapshot snap, long? stageRunId);

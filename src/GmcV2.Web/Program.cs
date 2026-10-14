@@ -40,6 +40,8 @@ public static class Program
         DiscountApi.Map(app);
         AnalyticsApi.Map(app);
         BenefitDeltaApi.Map(app);
+        FinalQuoteApi.Map(app);
+        StandardizeApi.Map(app);
         Pages.MapAll(app);
 
         app.UseStaticFiles(new StaticFileOptions

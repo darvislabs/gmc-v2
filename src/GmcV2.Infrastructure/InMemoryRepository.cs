@@ -558,6 +558,9 @@ public sealed class InMemoryRepository : IGmcRepository
     public Task<List<CompetitorQuoteRow>> GetCompetitorQuotesForCaseAsync(long caseId)
         => Task.FromResult(new List<CompetitorQuoteRow>());
 
+    public Task<List<(string ChannelType, decimal DefaultRatePct, decimal MinRatePct, decimal MaxRatePct)>> GetCommissionScheduleAsync()
+        => Task.FromResult(new List<(string, decimal, decimal, decimal)> { ("Default", 7.5m, 0m, 15m) });
+
     // ── commercial discount loop (prototype v74 step 8) ───────────────────
 
     private readonly List<DiscountRequestRow> _discounts = new();

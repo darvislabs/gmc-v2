@@ -993,6 +993,17 @@ public sealed partial class SqlRepository : IGmcRepository
 
     // ── analytics persistence (prototype §5) ──────────────────────────────
 
+    public async Task<List<(string ChannelType, decimal DefaultRatePct, decimal MinRatePct, decimal MaxRatePct)>> GetCommissionScheduleAsync()
+    {
+        await using var conn = await OpenAsync();
+        using var cmd = Cmd(conn, "SELECT ChannelType, DefaultRatePct, MinRatePct, MaxRatePct FROM uw.CommissionMaster WHERE IsActive = 1 ORDER BY CommissionMasterId");
+        using var r = await cmd.ExecuteReaderAsync();
+        var list = new List<(string, decimal, decimal, decimal)>();
+        while (await r.ReadAsync())
+            list.Add((S(r["ChannelType"]) ?? "", D(r["DefaultRatePct"]), D(r["MinRatePct"]), D(r["MaxRatePct"])));
+        return list;
+    }
+
     public async Task<long> SaveAnalyticsSnapshotAsync(long caseId, AnalyticsSnapshot snap, long? stageRunId)
     {
         await using var conn = await OpenAsync();

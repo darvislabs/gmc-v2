@@ -177,8 +177,11 @@ public static partial class StageHandlers
     private static List<StdClaim> StdClaims(DemoData d) => d.Claims.Select(cl => new StdClaim
     {
         ClaimNumber = cl.ClaimNumber, MemberNumber = cl.MemberNumber, ClaimStatus = cl.Status,
-        IncurredAmount = cl.Incurred, IsLargeClaim = cl.Large, IsMaternity = cl.Maternity,
-        NetworkType = cl.NonNetwork ? "NonNetwork" : "Network", DiseaseCategory = cl.Disease,
+        IncurredAmount = cl.Incurred, PaidAmount = cl.Incurred, ClaimedAmount = cl.Incurred,
+        SanctionedAmount = cl.Incurred, ApprovedAmount = cl.Incurred,
+        IsLargeClaim = cl.Large, IsMaternity = cl.Maternity,
+        NetworkType = cl.NonNetwork ? "NonNetwork" : "Network",
+        DiseaseCategory = cl.Disease, DiagnosisText = cl.Disease,
     }).ToList();
 
     // ─────────────────────────── Intake ───────────────────────────
@@ -409,6 +412,7 @@ public static partial class StageHandlers
             // Persist the projection ONLY for demo-data cases. Real cases carry parsed rows in
             // ing.RawRow (source of truth); a daemon restart wipes the in-memory bridge, and
             // blindly persisting here would overwrite the real backfill with synthetic rows.
+            // Real cases get their REAL claims persisted at Analyze (see DemoAnalyzeHandler).
             var isDemoData = !await repo.HasRawRowsAsync(c.CaseId);
             if (isDemoData)
             {
@@ -687,6 +691,13 @@ public static partial class StageHandlers
             var data = DemoPipelineData.For(c.CaseId);
             var snapshot = EngineBridge.ComputeAnalytics(StdMembers(data), StdClaims(data));
             await PersistAnalyticsAsync(repo, c.CaseId, snapshot, null);
+            // Real-data cases: persist the REAL standardized claims so §3 Standardize view,
+            // SI scenario and downstream readers work from the DB (survives restarts).
+            if (await repo.HasRawRowsAsync(c.CaseId))
+            {
+                try { await repo.SaveStdClaimsAsync(c.CaseId, StdClaims(data)); }
+                catch { /* additive */ }
+            }
             return new StageOutcome
             {
                 DetailJson = JsonSerializer.Serialize(new Dictionary<string, object?>

@@ -54,6 +54,8 @@ function renderNav() {
     { hash: '#/mapping', label: 'Mapping', show: canDecide() },
     { hash: '#/analytics', label: 'Analytics', show: canDecide() },
     { hash: '#/benefits', label: 'Benefit Delta', show: canDecide() },
+    { hash: '#/quote', label: 'Final Quote', show: canDecide() },
+    { hash: '#/standardize', label: 'Standardize', show: canDecide() },
     { hash: '#/exceptions', label: 'Exceptions', show: true },
     { hash: '#/users', label: 'Users', show: isAdmin() },
     { hash: '#/admin', label: 'Admin', show: isAdmin() },
@@ -102,6 +104,8 @@ const routes = {
   '#/mapping': viewMapping,
   '#/analytics': viewAnalytics,
   '#/benefits': viewBenefits,
+  '#/quote': viewFinalQuote,
+  '#/standardize': viewStandardize,
 };
 async function route() {
   const hash = location.hash || '#/';

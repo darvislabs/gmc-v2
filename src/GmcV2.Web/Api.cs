@@ -74,6 +74,14 @@ public static class Api
                 Sha256 = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(dto.FileName + rows.Count)))[..24],
             };
             d = await repo.AddDocumentAsync(d);
+            // JSON-rows uploads (smoke/contract path) persist rows under a stable sheet name so
+            // the RealDataBridge + Standardize view see the ORIGINAL data, not just the profile
+            // projection. Header row first, exactly like a parsed file.
+            if (rows.Count > 0)
+            {
+                var cells = rows.Select(r => r.Select(x => x ?? "").ToArray()).ToList();
+                await repo.AddRawRowsAsync(d.DocumentId, "Uploaded", cells);
+            }
             return Results.Json(d);
         });
 
