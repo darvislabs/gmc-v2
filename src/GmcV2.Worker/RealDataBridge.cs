@@ -22,7 +22,12 @@ public static class RealDataBridge
         foreach (var doc in c.Documents)
         {
             var allRows = repo.GetRawRowsAsync(doc.DocumentId).GetAwaiter().GetResult();
-            if (allRows.Count == 0) continue;
+            if (allRows.Count == 0)
+            {
+                Console.Error.WriteLine($"[RealDataBridge] case {caseId} doc {doc.DocType} ({doc.FileName}): 0 raw rows — skipped");
+                continue;
+            }
+            Console.Error.WriteLine($"[RealDataBridge] case {caseId} doc {doc.DocType} ({doc.FileName}): {allRows.Count} raw rows");
 
             // multi-sheet: each sheet carries its own header row — re-detect per sheet,
             // never blend rows across sheets under a single header.
@@ -40,7 +45,12 @@ public static class RealDataBridge
             }
         }
 
-        if (members.Count == 0 && claims.Count == 0) return false;
+        if (members.Count == 0 && claims.Count == 0)
+        {
+            Console.Error.WriteLine($"[RealDataBridge] case {caseId}: no usable member/claim rows → demo fallback");
+            return false;
+        }
+        Console.Error.WriteLine($"[RealDataBridge] case {caseId}: registered {members.Count} members / {claims.Count} claims (expiring {expiring.Count}, proposed {proposed.Count})");
 
         var data = new StageHandlers.DemoData();
         FillMembersTyped(members, data);

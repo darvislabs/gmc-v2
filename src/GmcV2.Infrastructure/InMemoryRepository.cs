@@ -577,6 +577,75 @@ public sealed class InMemoryRepository : IGmcRepository
         }
     }
 
+    // ─────────────────────────── clinical coding ───────────────────────────
+
+    private readonly List<ClaimCoding> _coding = new();
+    private readonly List<CodingReview> _codingReviews = new();
+    private long _codingSeq;
+    private long _codingReviewSeq;
+
+    public Task<List<ClaimCoding>> GetClaimCodingAsync(long caseId, string? codingStatus = null)
+    {
+        lock (_gate) return Task.FromResult(_coding
+            .Where(cc => cc.CaseId == caseId && cc.IsCurrent
+                && (codingStatus is null || cc.CodingStatus == codingStatus))
+            .OrderBy(cc => cc.ClaimCodingId)
+            .Select(CloneCoding)
+            .ToList());
+    }
+
+    public Task<ClaimCoding> SaveClaimCodingAsync(ClaimCoding coding)
+    {
+        lock (_gate)
+        {
+            // Corrections version the row: supersede the current one, insert the new version.
+            var prev = _coding.LastOrDefault(x => x.StdClaimId == coding.StdClaimId && x.IsCurrent);
+            if (prev is not null && prev.ClaimCodingId != coding.ClaimCodingId)
+                prev.IsCurrent = false;
+            if (coding.ClaimCodingId == 0)
+            {
+                coding.ClaimCodingId = ++_codingSeq;
+                coding.CodingVersion = prev is null ? 1 : prev.CodingVersion + 1;
+                coding.IsCurrent = true;
+                _coding.Add(coding);
+            }
+            else
+            {
+                var idx = _coding.FindIndex(x => x.ClaimCodingId == coding.ClaimCodingId);
+                if (idx < 0) throw new InvalidOperationException($"ClaimCoding {coding.ClaimCodingId} not found.");
+                coding.UpdatedAtUtc = DateTime.UtcNow;
+                _coding[idx] = coding;
+            }
+            return Task.FromResult(CloneCoding(coding));
+        }
+    }
+
+    public Task AddCodingReviewAsync(CodingReview review)
+    {
+        lock (_gate)
+        {
+            review.CodingReviewId = ++_codingReviewSeq;
+            review.ReviewedAtUtc = DateTime.UtcNow;
+            _codingReviews.Add(review);
+            return Task.CompletedTask;
+        }
+    }
+
+    private static ClaimCoding CloneCoding(ClaimCoding c) => new()
+    {
+        ClaimCodingId = c.ClaimCodingId, StdClaimId = c.StdClaimId, CaseId = c.CaseId,
+        CodingVersion = c.CodingVersion, IsCurrent = c.IsCurrent,
+        Level1IcdCode = c.Level1IcdCode, Level1DiseaseName = c.Level1DiseaseName,
+        Level1Confidence = c.Level1Confidence, Level1Provenance = c.Level1Provenance,
+        Level2IcdCode = c.Level2IcdCode, Level2DiseaseName = c.Level2DiseaseName,
+        Level2Confidence = c.Level2Confidence, Level2Provenance = c.Level2Provenance,
+        DiseaseGroup = c.DiseaseGroup, Department = c.Department, IsChronic = c.IsChronic,
+        BenefitGroup = c.BenefitGroup, MaternityDeliveryType = c.MaternityDeliveryType,
+        ReasonText = c.ReasonText, NeedsHumanReview = c.NeedsHumanReview,
+        CodingStatus = c.CodingStatus, GoldenEntryId = c.GoldenEntryId, ClaimNumber = c.ClaimNumber,
+        CreatedAtUtc = c.CreatedAtUtc, UpdatedAtUtc = c.UpdatedAtUtc,
+    };
+
     // ─────────────────────────── knowledge ───────────────────────────
 
     public Task<List<DiseaseEntry>> GetDiseasesAsync()
