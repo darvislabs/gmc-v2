@@ -17,8 +17,11 @@ public static class ApiMapping
         app.MapGet("/api/v1/mapping/cases", async (IGmcRepository repo) =>
         {
             var result = new List<object>();
-            foreach (var c in (await repo.ListCasesAsync()).OrderByDescending(x => x.CaseId))
+            foreach (var cBase in (await repo.ListCasesAsync()).OrderByDescending(x => x.CaseId))
             {
+                // ListCasesAsync doesn't hydrate children — fetch the full case (documents load)
+                var c = await repo.GetCaseAsync(cBase.CaseId);
+                if (c is null) continue;
                 var docCount = 0;
                 var mapped = 0;
                 var unmapped = 0;
