@@ -22,8 +22,13 @@ async function viewAnalytics() {
 async function renderAnalyticsPanel(caseId) {
   const el = $('#an-panel');
   el.innerHTML = '<div class="ox-skeleton" style="height:160px"></div>';
-  let d;
-  try { d = await api(`/api/v1/cases/${caseId}/analytics`); } catch (ex) {
+  let d, my;
+  try {
+    [d, my] = await Promise.all([
+      api(`/api/v1/cases/${caseId}/analytics`),
+      api(`/api/v1/cases/${caseId}/multiyear`).catch(() => null),
+    ]);
+  } catch (ex) {
     el.innerHTML = `<div class="ox-banner ox-banner--error">${esc(ex.message)}</div>`; return;
   }
   if (!d.computed) { el.innerHTML = `<div class="ox-banner ox-banner--warn">${esc(d.message || 'Run the pipeline first.')}</div>`; return; }
@@ -296,5 +301,24 @@ async function renderStandardizePanel(caseId) {
         </table>
       </div>
     </div>
-  </div>`;
+  </div>
+  ${my && my.years && my.years.length ? `
+  <div class="ox-card" style="margin-top:14px">
+    <div class="ox-mono-label">3-YEAR COMPANY EXPERIENCE — EXPOSURE, FREQUENCY & BURN COST BY POLICY YEAR</div>
+    <div class="ox-table-wrap" style="margin-top:10px">
+      <table class="ox-table">
+        <thead><tr><th>Policy Year</th><th>Lives</th><th>Paid Claims</th><th>Total Claims</th><th>Paid ₹</th><th>Frequency %</th><th>Burn Cost / Life</th></tr></thead>
+        <tbody>${my.years.map((y) => `
+          <tr><td><strong>${esc(y.policyYear)}</strong></td>
+          <td class="ox-num">${y.lives}</td>
+          <td class="ox-num">${y.paidClaims}</td>
+          <td class="ox-num">${y.totalClaims}</td>
+          <td class="ox-num">${inr(y.paidAmount)}</td>
+          <td class="ox-num">${y.frequencyPct != null ? y.frequencyPct + '%' : '—'}</td>
+          <td class="ox-num">${y.burnCostPerLife != null ? inr(y.burnCostPerLife) : '—'}</td></tr>`).join('')}
+        </tbody>
+      </table>
+    </div>
+    <div class="ox-muted" style="font-size:11px;margin-top:8px">Total 3-year paid: <span class="ox-num">${inr(my.totalPaid)}</span> · Latest experience year: ${esc(my.latestYear || '—')}</div>
+  </div>` : ''}`;
 }

@@ -154,7 +154,7 @@ public class AIGatewayTests
     {
         var data = new StageHandlers.DemoData();
         data.Members.Add(("EMP00001", "Employee", "Male", 40, false, false));
-        data.Claims.Add(("CL000001", "EMP00001", "Paid", 10_000m, false, false, false, "Unheard-Of Syndrome X"));
+        data.Claims.Add(("CL000001", "EMP00001", "Paid", 10_000m, false, false, false, "Unheard-Of Syndrome X", new DateTime(2024, 8, 15)));
         return data;
     }
 

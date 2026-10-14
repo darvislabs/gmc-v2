@@ -771,7 +771,7 @@ public sealed partial class SqlRepository : IGmcRepository
         await using var conn = await OpenAsync();
         using var cmd = Cmd(conn, """
             SELECT s.StdClaimId, s.CaseId, s.ClaimNumber, s.MemberNumber, s.ClaimStatus, s.PaidAmount,
-                   s.DiseaseCategory, s.DiagnosisText, s.IsLargeClaim,
+                   s.DiseaseCategory, s.DiagnosisText, s.IsLargeClaim, s.AdmissionDate,
                    CAST(COALESCE(m.HasChronic, 0) AS BIT) AS IsChronic
               FROM ing.StdClaim s
               LEFT JOIN ing.StdMember m ON m.CaseId = s.CaseId AND m.MemberNumber = s.MemberNumber
@@ -793,6 +793,7 @@ public sealed partial class SqlRepository : IGmcRepository
                 DiagnosisText = S(r["DiagnosisText"]) is { Length: > 0 } dt ? dt : null,
                 IsLargeClaim = B(r["IsLargeClaim"]),
                 IsChronic = B(r["IsChronic"]),
+                AdmissionDate = r["AdmissionDate"] is DateTime dt2 ? dt2 : null,
             });
         return list;
     }
@@ -807,8 +808,8 @@ public sealed partial class SqlRepository : IGmcRepository
         {
             using var cmd = Cmd(conn, """
                 INSERT ing.StdClaim (CaseId, ClaimNumber, MemberNumber, ClaimStatus, PaidAmount,
-                                     DiseaseCategory, DiagnosisText, IsLargeClaim)
-                VALUES (@case, @cn, @mn, @st, @paid, @dc, @dx, @large)
+                                     DiseaseCategory, DiagnosisText, IsLargeClaim, AdmissionDate)
+                VALUES (@case, @cn, @mn, @st, @paid, @dc, @dx, @large, @adm)
                 """);
             cmd.Transaction = tx;
             cmd.Parameters.AddWithValue("@case", caseId);
@@ -819,9 +820,23 @@ public sealed partial class SqlRepository : IGmcRepository
             cmd.Parameters.AddWithValue("@dc", (object?)cl.DiseaseCategory ?? DBNull.Value);
             cmd.Parameters.AddWithValue("@dx", (object?)cl.DiagnosisText ?? DBNull.Value);
             cmd.Parameters.AddWithValue("@large", cl.IsLargeClaim);
+            cmd.Parameters.AddWithValue("@adm", (object?)cl.AdmissionDate ?? DBNull.Value);
             await cmd.ExecuteNonQueryAsync();
         }
         await tx.CommitAsync();
+    }
+
+    public async Task<int> GetStdMemberCountAsync(long caseId)
+    {
+        await using var conn = await OpenAsync();
+        using var cmd = Cmd(conn, """
+            SELECT COALESCE(
+                NULLIF((SELECT COUNT(*) FROM ing.StdMember WHERE CaseId = @case), 0),
+                (SELECT TOP 1 CoveredLives FROM uw.AnalyticsSnapshot WHERE CaseId = @case ORDER BY AnalyticsSnapshotId DESC), 0)
+            """);
+        cmd.Parameters.AddWithValue("@case", caseId);
+        var r = await cmd.ExecuteScalarAsync();
+        return Convert.ToInt32(r);
     }
 
     public async Task<bool> HasRawRowsAsync(long caseId)

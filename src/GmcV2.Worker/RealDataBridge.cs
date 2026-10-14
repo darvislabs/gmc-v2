@@ -15,7 +15,7 @@ public static class RealDataBridge
     public static bool TryRegister(long caseId, Case c, IGmcRepository repo)
     {
         var members = new List<(string, string, string, int, bool, bool)>();
-        var claims = new List<(string, string, string, decimal, bool, bool, bool, string)>();
+        var claims = new List<(string, string, string, decimal, bool, bool, bool, string, DateTime?)>();
         var expiring = new List<BenefitScheduleLine>();
         var proposed = new List<BenefitScheduleLine>();
 
@@ -102,7 +102,7 @@ public static class RealDataBridge
         }
     }
 
-    private static void FillClaims(List<RawRow> rows, List<(string, string, string, decimal, bool, bool, bool, string)> claims)
+    private static void FillClaims(List<RawRow> rows, List<(string, string, string, decimal, bool, bool, bool, string, DateTime?)> claims)
     {
         var headers = rows[0].Cells;
         var cClaim = Col(headers, "Claim No", "ClaimNo", "Claim Number", "Claim ID");
@@ -112,6 +112,7 @@ public static class RealDataBridge
         var cSanctioned = Col(headers, "Sanctioned Amt", "Sanctioned Amount", "SanctionedAmt", "Approved Amount", "Approved");
         var cClaimed = Col(headers, "Claimed Amount", "ClaimedAmt", "Claimed");
         var cDisease = Col(headers, "Disease", "Diagnosis", "Illness", "Ailment");
+        var cAdm = Col(headers, "Admission Date", "AdmissionDate", "Admission", "Date of Admission", "DoA");
 
         foreach (var r in rows.Skip(1))
         {
@@ -121,7 +122,8 @@ public static class RealDataBridge
             var status = At(cells, cStatus) is { Length: > 0 } s ? s : "Paid";
             var amount = ParseDec(At(cells, cSanctioned)) ?? ParseDec(At(cells, cPaid)) ?? ParseDec(At(cells, cClaimed)) ?? 0m;
             var disease = At(cells, cDisease);
-            claims.Add((claimNo, memberNo, status, amount, amount >= 200_000m, disease.Contains("Maternity", StringComparison.OrdinalIgnoreCase) || disease.Contains("Delivery", StringComparison.OrdinalIgnoreCase), false, disease));
+            DateTime? adm = cAdm >= 0 && DateTime.TryParse(At(cells, cAdm), out var d) ? d : null;
+            claims.Add((claimNo, memberNo, status, amount, amount >= 200_000m, disease.Contains("Maternity", StringComparison.OrdinalIgnoreCase) || disease.Contains("Delivery", StringComparison.OrdinalIgnoreCase), false, disease, adm));
         }
     }
 
@@ -171,7 +173,7 @@ public static class RealDataBridge
     }
 
     private static void FillClaimsTyped(
-        List<(string ClaimNumber, string MemberNumber, string Status, decimal Incurred, bool Large, bool Maternity, bool NonNetwork, string Disease)> src,
+        List<(string ClaimNumber, string MemberNumber, string Status, decimal Incurred, bool Large, bool Maternity, bool NonNetwork, string Disease, DateTime? Adm)> src,
         StageHandlers.DemoData data)
     {
         foreach (var cl in src) data.Claims.Add(cl);

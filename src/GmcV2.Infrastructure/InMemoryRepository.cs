@@ -481,6 +481,7 @@ public sealed class InMemoryRepository : IGmcRepository
     private readonly Dictionary<long, List<StdClaim>> _stdClaims = new();
     private readonly Dictionary<long, SIScenarioRow> _siScenarios = new();
 
+    public Task<int> GetStdMemberCountAsync(long caseId) => Task.FromResult(0);
     public Task SaveStdClaimsAsync(long caseId, IReadOnlyList<StdClaim> claims)
     {
         lock (_gate) _stdClaims[caseId] = claims.Select(c => new StdClaim

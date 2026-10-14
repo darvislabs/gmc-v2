@@ -46,7 +46,7 @@ public static partial class StageHandlers
     public sealed class DemoData
     {
         public List<(string MemberNumber, string Relationship, string Gender, int Age, bool Chronic, bool Parent)> Members { get; } = new();
-        public List<(string ClaimNumber, string MemberNumber, string Status, decimal Incurred, bool Large, bool Maternity, bool NonNetwork, string Disease)> Claims { get; } = new();
+        public List<(string ClaimNumber, string MemberNumber, string Status, decimal Incurred, bool Large, bool Maternity, bool NonNetwork, string Disease, DateTime? Adm)> Claims { get; } = new();
         public decimal DataQualityScore { get; } = 96m;
         public decimal MappingConfidence { get; } = 99m;
         public List<BenefitScheduleLine> Expiring { get; } = DemoBenefitSchedule("Expiring", 300000m);
@@ -104,14 +104,14 @@ public static partial class StageHandlers
         {
             var m = data.Members[rng.Next(memberCount)];
             var amt = Math.Round(largeBudget / largeRows, 2); // ≈ 210,822 ≥ 2,00,000
-            data.Claims.Add(($"CL{++claimIdx:D6}", m.MemberNumber, "Paid", amt, true, false, ++nonNetworkTick % 8 == 0, diseases[rng.Next(6)]));
+            data.Claims.Add(($"CL{++claimIdx:D6}", m.MemberNumber, "Paid", amt, true, false, ++nonNetworkTick % 8 == 0, diseases[rng.Next(6)], DemoClaimDate(i, 0)));
         }
         var spouses = data.Members.Where(m => m.Relationship == "Spouse" || m.Relationship == "Employee").ToList();
         for (var i = 0; i < maternityRows; i++)
         {
             var m = spouses[rng.Next(spouses.Count)];
             var amt = Math.Round(maternityBudget / maternityRows, 2);
-            data.Claims.Add(($"CL{++claimIdx:D6}", m.MemberNumber, i % 6 == 0 ? "Outstanding" : "Paid", amt, false, true, ++nonNetworkTick % 9 == 0, i % 2 == 0 ? "Normal Delivery" : "Caesarean Delivery"));
+            data.Claims.Add(($"CL{++claimIdx:D6}", m.MemberNumber, i % 6 == 0 ? "Outstanding" : "Paid", amt, false, true, ++nonNetworkTick % 9 == 0, i % 2 == 0 ? "Normal Delivery" : "Caesarean Delivery", DemoClaimDate(i, 1)));
         }
         var perSmall = smallBudget / smallRows;
         for (var i = 0; i < smallRows; i++)
@@ -122,7 +122,7 @@ public static partial class StageHandlers
                 ? smallBudget - perSmall * (smallRows - 1)
                 : Math.Round(perSmall * (0.6m + (decimal)((i * 37) % 90) / 100m), 2);
             var status = i % 11 == 0 ? "Rejected" : i % 5 == 0 ? "Outstanding" : "Paid";
-            data.Claims.Add(($"CL{++claimIdx:D6}", m.MemberNumber, status, amt, false, false, ++nonNetworkTick % 8 == 0, diseases[rng.Next(6)]));
+            data.Claims.Add(($"CL{++claimIdx:D6}", m.MemberNumber, status, amt, false, false, ++nonNetworkTick % 8 == 0, diseases[rng.Next(6)], DemoClaimDate(i, 2)));
         }
 
         // exact reconciliation
@@ -130,9 +130,18 @@ public static partial class StageHandlers
         if (drift != 0)
         {
             var last = data.Claims[^1];
-            data.Claims[^1] = (last.ClaimNumber, last.MemberNumber, last.Status, last.Incurred + drift, last.Large, last.Maternity, last.NonNetwork, last.Disease);
+            data.Claims[^1] = (last.ClaimNumber, last.MemberNumber, last.Status, last.Incurred + drift, last.Large, last.Maternity, last.NonNetwork, last.Disease, last.Adm);
         }
         return data;
+    }
+
+/// <summary>Deterministic admission dates spread across the 3 experience years so the
+    /// demo book exercises the multi-year view (FY starts July 1).</summary>
+    internal static DateTime? DemoClaimDate(int i, int yearOffset)
+    {
+        var fy = 2023 + ((i + yearOffset) % 3);           // 2023-24 / 2024-25 / 2025-26
+        var month = 1 + (i * 5 + yearOffset * 3) % 12;    // spread across months
+        return new DateTime(fy, month, 1 + (i % 27));
     }
 
     internal static readonly string[] DemoClaimsHeaders =
@@ -182,6 +191,7 @@ public static partial class StageHandlers
         IsLargeClaim = cl.Large, IsMaternity = cl.Maternity,
         NetworkType = cl.NonNetwork ? "NonNetwork" : "Network",
         DiseaseCategory = cl.Disease, DiagnosisText = cl.Disease,
+        AdmissionDate = cl.Adm,
     }).ToList();
 
     // ─────────────────────────── Intake ───────────────────────────
