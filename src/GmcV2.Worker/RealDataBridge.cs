@@ -21,15 +21,22 @@ public static class RealDataBridge
 
         foreach (var doc in c.Documents)
         {
-            var rows = repo.GetRawRowsAsync(doc.DocumentId).GetAwaiter().GetResult();
-            if (rows.Count == 0) continue;
+            var allRows = repo.GetRawRowsAsync(doc.DocumentId).GetAwaiter().GetResult();
+            if (allRows.Count == 0) continue;
 
-            switch (doc.DocType)
+            // multi-sheet: each sheet carries its own header row — re-detect per sheet,
+            // never blend rows across sheets under a single header.
+            foreach (var sheetGroup in allRows.GroupBy(r => r.SheetName ?? "").OrderBy(g => g.Key, StringComparer.OrdinalIgnoreCase))
             {
-                case "Enrollment": FillEnrollment(rows, members); break;
-                case "ClaimsRegister": FillClaims(rows, claims); break;
-                case "ExpiringPolicy": FillSchedule(rows, "Expiring", expiring); break;
-                case "Rfq": FillSchedule(rows, "Proposed", proposed); break;
+                var rows = sheetGroup.OrderBy(r => r.RowNumber).ToList();
+                if (rows.Count == 0) continue;
+                switch (doc.DocType)
+                {
+                    case "Enrollment": FillEnrollment(rows, members); break;
+                    case "ClaimsRegister": FillClaims(rows, claims); break;
+                    case "ExpiringPolicy": FillSchedule(rows, "Expiring", expiring); break;
+                    case "Rfq": FillSchedule(rows, "Proposed", proposed); break;
+                }
             }
         }
 

@@ -111,17 +111,18 @@ public sealed class PipelineOrchestrator
     /// Idempotency key: document count + document hashes. Any new upload or
     /// re-parse changes the hash and invalidates cached stage runs.
     /// </summary>
-    public static string ComputeInputsHash(Case c)
+    public static string ComputeInputsHash(Case c, string? salt = null)
     {
         var sb = new StringBuilder();
         sb.Append(c.Documents.Count).Append('|');
         foreach (var d in c.Documents.OrderBy(d => d.DocumentId))
             sb.Append(d.DocType).Append(':').Append(d.ParseStatus).Append(':').Append(d.Sha256).Append('|');
+        if (!string.IsNullOrEmpty(salt)) sb.Append("salt:").Append(salt);
         var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(sb.ToString()));
         return Convert.ToHexString(bytes);
     }
 
-    public async Task<Case> RunAsync(long caseId)
+    public async Task<Case> RunAsync(long caseId, bool force = false)
     {
         var c = await _repo.GetCaseAsync(caseId)
             ?? throw new InvalidOperationException($"Case {caseId} not found.");
@@ -146,7 +147,7 @@ public sealed class PipelineOrchestrator
             await _repo.UpdateCaseAsync(c);
         }
 
-        var inputsHash = ComputeInputsHash(c);
+        var inputsHash = ComputeInputsHash(c, force ? $"force:{DateTime.UtcNow:yyyyMMddHHmmss}" : null);
         var ctx = new PerCasePipelineContext();
 
         foreach (var stage in Enums.Stages)
@@ -208,11 +209,21 @@ public sealed class PipelineOrchestrator
             sw.Stop();
 
             // Persist blocking exceptions + park the case (orchestrator STOPS).
+            // Supersede rule: an exception of the same code on the same stage that is
+            // already open is RESOLVED when a fresh one is raised — the new assessment
+            // (post-correction/post-AI) replaces the stale count.
             var blocking = outcome.ToRaise.Where(e => e.Blocking).ToList();
             foreach (var e in outcome.ToRaise)
             {
                 e.CaseId = caseId;
                 e.ResumeStage = string.IsNullOrEmpty(e.ResumeStage) ? stage : e.ResumeStage;
+                try
+                {
+                    var stale = await _repo.GetOpenExceptionsAsync(caseId);
+                    foreach (var old in stale.Where(o => o.Code == e.Code && o.ResumeStage == stage))
+                        await _repo.ResolveExceptionAsync(old.ExceptionId, $"system:superseded-by-new-{e.Code}");
+                }
+                catch { /* supersede is best-effort */ }
                 await _repo.RaiseExceptionAsync(e);
             }
 

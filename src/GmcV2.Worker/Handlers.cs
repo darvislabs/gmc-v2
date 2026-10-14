@@ -415,7 +415,7 @@ public static class StageHandlers
             {
                 var match = diseases.FirstOrDefault(d => d.DiseaseName.Equals(claim.Disease, StringComparison.OrdinalIgnoreCase)
                     || d.MatchKeywords.Any(k => claim.Disease.Contains(k, StringComparison.OrdinalIgnoreCase)));
-                if (match is null && clinical is not null)
+                if (match is null && clinical is not null && !string.IsNullOrWhiteSpace(claim.Disease))
                 {
                     var (aiCode, _, aiConf, _) = await TryCodeAsync(clinical, claim.Disease, diseases);
                     if (aiCode is null) { unmapped++; continue; }
