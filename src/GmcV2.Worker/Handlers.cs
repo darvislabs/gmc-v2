@@ -262,8 +262,20 @@ public static class StageHandlers
                 {
                     var header = headers[i];
                     var isSanctioned = header == "Sanctioned Amt";
+                    // Idempotent + human-safe: an existing column row (same doc + ordinal)
+                    // keeps its TargetParameter when the machine suggestion is 'Unmapped' or
+                    // the stored tier is HumanConfirmed — a human retarget in the Mapping
+                    // Workbench survives force re-runs.
+                    var existing = (await repo.GetSourceColumnsAsync(doc.DocumentId))
+                        .FirstOrDefault(sc => sc.ColumnIndex == i);
+                    var suggestion = MapHeaderToParameter(header);
+                    var target = existing is { ProvenanceTier: Enums.TierHumanConfirmed }
+                        ? existing.TargetParameter
+                        : suggestion != "Unmapped" ? suggestion : existing?.TargetParameter ?? "Unmapped";
+                    var isHuman = existing is { ProvenanceTier: Enums.TierHumanConfirmed };
                     await repo.AddOrUpdateSourceColumnAsync(new SourceColumn
                     {
+                        SourceColumnId = existing?.SourceColumnId ?? 0,
                         DocumentId = doc.DocumentId,
                         ColumnIndex = i,
                         Header = header,
@@ -271,11 +283,11 @@ public static class StageHandlers
                         DistinctCount = isSanctioned ? rows.Count - 1 : Math.Max(2, (rows.Count - 1) / 10),
                         DetectedType = header.Contains("Age") ? "Number" : "Text",
                         SampleValues = rows.Skip(1).Take(3).Select(r => r[Math.Min(i, r.Length - 1)]).ToArray(),
-                        TargetParameter = MapHeaderToParameter(header),
-                        Confidence = isSanctioned ? 1.00m : 0.99m,
-                        ProvenanceTier = isSanctioned ? Enums.TierLearnedAlias : Enums.TierExactDictionary,
-                        Reason = isSanctioned ? "Learned alias from a previous case for this TPA" : "Exact dictionary match",
-                        IsRequired = IsRequiredParameter(MapHeaderToParameter(header)),
+                        TargetParameter = target,
+                        Confidence = isHuman ? 1.00m : isSanctioned ? 1.00m : 0.99m,
+                        ProvenanceTier = isHuman ? Enums.TierHumanConfirmed : isSanctioned ? Enums.TierLearnedAlias : Enums.TierExactDictionary,
+                        Reason = isHuman ? "Human retarget in Mapping Workbench" : isSanctioned ? "Learned alias from a previous case for this TPA" : "Exact dictionary match",
+                        IsRequired = target is { } t && t != "Unmapped" && MappingParameters.IsRequired(t),
                     });
                     columns++;
                 }
@@ -324,6 +336,13 @@ public static class StageHandlers
             {
                 foreach (var col in await repo.GetSourceColumnsAsync(doc.DocumentId))
                 {
+                    // Human-confirmed decisions (Mapping Workbench) are never overwritten.
+                    if (col.ProvenanceTier == Enums.TierHumanConfirmed)
+                    {
+                        total++;
+                        confSum += col.Confidence * 100m;
+                        continue;
+                    }
                     var suggestion = EngineBridge.MapColumn(col.Header);
                     var target = suggestion?.TargetParameter ?? col.TargetParameter ?? "Unmapped";
                     var conf = suggestion?.Confidence ?? col.Confidence;

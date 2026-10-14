@@ -96,6 +96,7 @@ public static class Enums
     public const string TierRetrieval = "Retrieval";
     public const string TierLlmSemantic = "LlmSemantic";
     public const string TierFuzzy = "Fuzzy";
+    public const string TierHumanConfirmed = "HumanConfirmed";  // mapping workbench — human decision, never overridden
 
     // ─── Pricing component sources (workflow §9) ───
     public const string SrcMaster = "Master";

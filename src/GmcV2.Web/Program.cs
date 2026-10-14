@@ -34,6 +34,7 @@ public static class Program
         Api.MapAll(app);
         ApiAdmin.MapAll(app);
         ApiCoding.MapAll(app);
+        ApiMapping.MapAll(app);
         Pages.MapAll(app);
 
         app.UseStaticFiles(new StaticFileOptions
