@@ -876,6 +876,31 @@ html[data-theme="light"] .ox-topbar { background: #FFFFFF; }
 .ox-login-btn { margin-top: 10px; width: 100%; }
 .ox-chip-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
 
+/* mapping workbench (workflow §6.2) — conflict panel + toast */
+.ox-conflict {
+    border: 1px solid rgba(255,59,48,0.28); border-left: 3px solid var(--ox-danger);
+    border-radius: var(--ox-radius-sm, 8px); padding: 12px 14px; margin-top: 10px; background: var(--ox-t03);
+}
+.ox-conflict-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 6px; }
+.ox-conflict-row {
+    display: flex; align-items: center; gap: 10px; padding: 8px 6px;
+    border-top: 1px solid var(--ox-line); cursor: pointer; min-height: 44px;
+}
+.ox-conflict-row:hover { background: var(--ox-t08); }
+.ox-conflict-row input[type="radio"] { accent-color: var(--ox-vivid); width: 16px; height: 16px; }
+.ox-toast {
+    position: fixed; left: 50%; bottom: 28px; transform: translate(-50%, 16px);
+    background: var(--ox-surface); color: var(--ox-text); border: 1px solid var(--ox-border);
+    border-left: 3px solid var(--ox-ok);
+    border-radius: var(--ox-radius-sm, 8px); padding: 12px 18px;
+    font-size: 13px; font-family: var(--ox-font-mono);
+    box-shadow: 0 8px 30px rgba(0,0,0,.35); z-index: 200;
+    opacity: 0; pointer-events: none; transition: opacity .18s var(--ox-ease-out), transform .18s var(--ox-ease-out);
+    max-width: min(92vw, 480px);
+}
+.ox-toast.open { opacity: 1; transform: translate(-50%, 0); }
+.ox-toast--error { border-left-color: var(--ox-danger); }
+
 /* drawer (new case) — layout-only overrides; z-index/transform live in the main
    .ox-drawer rule above (drawer 100 > backdrop 90, so the blur never hits the drawer) */
 .ox-drawer {
@@ -920,4 +945,8 @@ html[data-theme="light"] .ox-topbar { background: #FFFFFF; }
     .ox-nav-item { padding: 12px 18px; min-height: 44px; }
     .ox-bell, .ox-burger { width: 44px; height: 44px; }
     .ox-table tbody td.ox-right a.ox-btn { min-height: 36px; }
+    /* mapping workbench: conflict rows wrap, toast hugs the viewport */
+    .ox-conflict-row { flex-wrap: wrap; row-gap: 2px; }
+    .ox-toast { left: 4vw; right: 4vw; transform: translate(0, 16px); max-width: none; bottom: 18px; }
+    .ox-toast.open { transform: translate(0, 0); }
 }

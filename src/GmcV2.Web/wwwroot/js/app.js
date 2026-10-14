@@ -13,8 +13,11 @@ async function api(path, opts = {}) {
   if (r.status === 401) { location.href = '/login'; throw new Error('unauthenticated'); }
   if (!r.ok) {
     let msg = r.status + ' ' + r.statusText;
-    try { const j = await r.json(); if (j.error) msg = j.error; } catch { /* ignore */ }
-    throw new Error(msg);
+    let body = null;
+    try { const j = await r.json(); if (j.error) msg = j.error; body = j; } catch { /* ignore */ }
+    const err = new Error(msg);
+    if (body) err.conflict = body.conflict ?? null;   // 409 retarget conflicts surface in the drawer
+    throw err;
   }
   return r.status === 204 ? null : r.json();
 }
@@ -48,6 +51,7 @@ function renderNav() {
   const items = [
     { hash: '#/', label: 'Cases', show: true },
     { hash: '#/coding', label: 'Coding', show: canDecide() },
+    { hash: '#/mapping', label: 'Mapping', show: canDecide() },
     { hash: '#/exceptions', label: 'Exceptions', show: true },
     { hash: '#/users', label: 'Users', show: isAdmin() },
     { hash: '#/admin', label: 'Admin', show: isAdmin() },
@@ -93,6 +97,7 @@ const routes = {
   '#/about': viewAbout,
   '#/case': viewCase,
   '#/coding': viewCoding,
+  '#/mapping': viewMapping,
 };
 async function route() {
   const hash = location.hash || '#/';
@@ -248,8 +253,10 @@ async function viewCase(id) {
   const missing = required.filter(dt => !have.has(dt));
   const runParam = new URLSearchParams(location.hash.split('?')[1] || '');
   const shouldRun = runParam.get('run') === '1' && (c.status === 'Draft' || c.status === 'AwaitingDocuments');
-  // exception CTA: the case object carries open exceptions — first clinical one wins
-  const openClinical = (c.exceptions || []).find(e => e.status !== 'Resolved' && isClinical(e.code))?.code;
+  // exception CTA: the case object carries open exceptions — first clinical/mapping one wins
+  const openExc = (c.exceptions || []).find(e => e.status !== 'Resolved' && (isClinical(e.code) || isMappingExc(e.code)));
+  const openClinical = openExc && isClinical(openExc.code) ? openExc.code : null;
+  const openMapping = openExc && isMappingExc(openExc.code) ? openExc.code : null;
 
   $('#view').innerHTML = `
     <a class="ox-muted" href="#/" style="font-size:13px">← All cases</a>
@@ -294,7 +301,12 @@ async function viewCase(id) {
       <div class="ox-banner ox-banner--warn" style="margin-top:16px">
         <strong>${openClinical === 'EXC-CLIN-UNMAPPED' ? 'Unmapped claim rows' : 'Coding review band'} block this case</strong> — resolve them in the coding workbench.
       </div>
-      <a class="ox-btn ox-btn--primary" style="margin-top:8px" href="#/coding?case=${id}">Open coding workbench →</a>` : ''}`;
+      <a class="ox-btn ox-btn--primary" style="margin-top:8px" href="#/coding?case=${id}">Open coding workbench →</a>` : ''}
+    ${c.status === 'ExceptionPending' && openMapping ? `
+      <div class="ox-banner ox-banner--warn" style="margin-top:16px">
+        <strong>Column mapping issues block this case (${esc(openMapping)})</strong> — review and retarget columns in the mapping workbench.
+      </div>
+      <a class="ox-btn ox-btn--primary" style="margin-top:8px" href="#/mapping?case=${id}">Open mapping workbench →</a>` : ''}`;
 
   const runBtn = $('#run-pipeline');
   if (runBtn) runBtn.addEventListener('click', () => startPipeline(id));
@@ -643,6 +655,191 @@ function openReviewDrawer(caseId, codingId) {
   drawer.querySelectorAll('[data-act]').forEach(b => b.addEventListener('click', () => decide(b.dataset.act, null, null)));
 }
 
+// ── view: mapping workbench (column → parameter, workflow §6.2 / tech §5.3) ─
+let MAPPING_CASES = [];
+async function viewMapping() {
+  if (!canDecide()) { $('#view').innerHTML = '<div class="ox-banner ox-banner--error">Underwriters only.</div>'; return; }
+  $('#pagetitle').textContent = 'Mapping Workbench';
+  $('#view').innerHTML = '<div class="ox-skeleton" style="height:200px"></div>';
+  MAPPING_CASES = await api('/api/v1/mapping/cases');
+  // ?case=N deep-link (EXC-MAP-* CTAs) → auto-select; otherwise the busiest case
+  const wantCase = new URLSearchParams(location.hash.split('?')[1] || '').get('case');
+  const sel = wantCase ?? String(MAPPING_CASES[0]?.caseId ?? '');
+  if (!sel || MAPPING_CASES.length === 0) {
+    $('#view').innerHTML = '<div class="ox-empty-state"><p class="ox-mb-0">No profiled columns yet — run a pipeline first.</p></div>';
+    return;
+  }
+  $('#view').innerHTML = `
+    <div class="ox-row ox-row--between ox-row--wrap" style="margin-bottom:12px;gap:8px">
+      <select class="ox-select" id="mw-case" style="max-width:460px">${MAPPING_CASES.map(c =>
+        `<option value="${c.caseId}" ${String(c.caseId) === String(sel) ? 'selected' : ''}>${esc(c.caseNumber)} — ${esc(c.clientName)} (${esc(c.status)})</option>`).join('')}</select>
+      <button class="ox-btn ox-btn--ghost" id="mw-rerun" title="Re-run the pipeline so remapped columns re-standardize">Re-run pipeline</button>
+    </div>
+    <div id="mw-panel"></div>
+    <div class="ox-drawer-backdrop ox-hide" id="drawer-backdrop"></div>
+    <aside class="ox-drawer ox-hide" id="drawer"></aside>`;
+  $('#mw-case').addEventListener('change', () => location.hash = `#/mapping?case=${$('#mw-case').value}`);
+  $('#mw-rerun').addEventListener('click', async () => {
+    const btn = $('#mw-rerun'); btn.disabled = true; btn.textContent = 'Running…';
+    try { await post(`/api/v1/cases/${sel}/pipeline/start?force=1`); toast('Pipeline re-run complete'); }
+    catch (ex) { toast(ex.message, true); }
+    btn.disabled = false; btn.textContent = 'Re-run pipeline';
+    renderMappingPanel(sel);
+  });
+  await renderMappingPanel(sel);
+}
+
+async function renderMappingPanel(caseId) {
+  const panel = $('#mw-panel');
+  if (!panel) return;
+  panel.innerHTML = '<div class="ox-skeleton" style="height:120px"></div>';
+  let data;
+  try { data = await api(`/api/v1/mapping/${caseId}`); }
+  catch (ex) { panel.innerHTML = `<div class="ox-banner ox-banner--error">Failed to load mapping: ${esc(ex.message)}</div>`; return; }
+
+  const kpis = [
+    ['DOCUMENTS', data.counts.documents, ''],
+    ['MAPPED', data.counts.mapped, data.counts.unmapped > 0 ? '' : 'ox-kpi--ok'],
+    ['UNMAPPED', data.counts.unmapped, data.counts.unmapped > 0 ? 'ox-kpi--danger' : 'ox-kpi--ok'],
+    ['CONFLICTS', data.counts.conflicts, data.counts.conflicts > 0 ? 'ox-kpi--danger' : ''],
+  ];
+  panel.innerHTML = `
+    <div class="ox-kpi-row" style="margin-bottom:14px">
+      ${kpis.map(([label, val, cls]) => `<div class="ox-kpi ${cls}"><div class="ox-mono-label">${label}</div><div class="ox-kpi-num">${val}</div></div>`).join('')}
+    </div>
+    ${data.conflicts.length > 0 ? `
+      <div class="ox-banner ox-banner--error" style="margin-bottom:12px">
+        <strong>${data.conflicts.length} mapping conflict${data.conflicts.length > 1 ? 's' : ''} block standardization</strong> —
+        multiple columns claim the same parameter. Pick the winner per conflict.
+      </div>
+      <div class="ox-card" style="margin-bottom:14px">
+        <div class="ox-mono-label">CONFLICT PANEL</div>
+        ${data.conflicts.map(cf => {
+          const cols = data.documents.flatMap(d => d.columns).filter(c => cf.sourceColumnIds.includes(c.sourceColumnId));
+          return `<div class="ox-conflict" data-target="${esc(cf.targetParameter)}">
+            <div class="ox-conflict-head"><span class="ox-mono">${esc(cf.targetParameter)}</span><span class="ox-muted" style="font-size:11px">doc ${esc(String(cf.documentId))} · ${esc(cf.docType)}</span><span class="ox-badge ox-badge--danger">${cf.sourceColumnIds.length} claimants</span></div>
+            ${cols.map(c => `
+              <label class="ox-conflict-row">
+                <input type="radio" name="conf-${esc(cf.targetParameter)}" value="${c.sourceColumnId}">
+                <span class="ox-mono">#${c.sourceColumnId}</span>
+                <span>${esc(c.header)}</span>
+                <span class="ox-muted" style="font-size:11px">${esc(String(c.samples?.[0] ?? ''))}</span>
+              </label>`).join('')}
+            <button class="ox-btn ox-btn--primary ox-btn--sm" style="margin-top:6px" data-resolve="${esc(cf.targetParameter)}">Resolve — winner keeps it</button>
+          </div>`;
+        }).join('')}
+      </div>` : ''}
+    ${data.documents.length === 0 ? '<div class="ox-empty-state"><p class="ox-mb-0">No profiled documents on this case.</p></div>' :
+      data.documents.map(doc => `
+        <div class="ox-card" style="margin-bottom:14px">
+          <div class="ox-row ox-row--between ox-row--wrap">
+            <div class="ox-mono-label">${esc(doc.docType).toUpperCase()} — ${esc(doc.fileName)}</div>
+            <span class="ox-badge ${doc.parseStatus === 'Parsed' ? 'ox-badge--ok' : 'ox-badge--neutral'}">${esc(doc.parseStatus)}</span>
+          </div>
+          <div class="ox-table-wrap"><table class="ox-table">
+            <thead><tr><th>Header</th><th>Type</th><th>Samples</th><th>Target</th><th>Conf.</th><th>Provenance</th><th></th></tr></thead>
+            <tbody>${doc.columns.map(col => `
+              <tr>
+                <td data-th="Header"><span class="ox-mono">${esc(col.header)}</span></td>
+                <td data-th="Type">${esc(col.detectedType)}</td>
+                <td data-th="Samples" class="ox-muted" style="font-size:11px;max-width:220px;overflow-wrap:anywhere">${esc((col.samples || []).join(' · ')) || '—'}</td>
+                <td data-th="Target">${col.targetParameter
+                  ? `<span class="ox-mono">${esc(col.targetParameter)}</span>${col.isRequired ? ' <span class="ox-badge ox-badge--vivid">required</span>' : ''}`
+                  : '<span class="ox-muted">—</span>'}</td>
+                <td data-th="Conf."><span class="ox-badge ${col.provenanceTier === 'HumanConfirmed' ? 'ox-badge--electric' : col.confidence >= 0.9 ? 'ox-badge--ok' : 'ox-badge--warn'}">${col.confidence != null ? Number(col.confidence).toFixed(2) : '—'}</span></td>
+                <td data-th="Provenance"><span class="ox-badge ${col.provenanceTier === 'HumanConfirmed' ? 'ox-badge--electric' : 'ox-badge--neutral'}">${esc(col.provenanceTier || '—')}</span></td>
+                <td class="ox-right"><button class="ox-btn ox-btn--ghost ox-btn--sm" data-retarget="${col.sourceColumnId}">Retarget</button></td>
+              </tr>`).join('')}</tbody>
+          </table></div>
+        </div>`).join('')}`;
+
+  panel.querySelectorAll('[data-retarget]').forEach(b => b.addEventListener('click', () =>
+    openRetargetDrawer(caseId, Number(b.dataset.retarget), data)));
+  panel.querySelectorAll('[data-resolve]').forEach(b => b.addEventListener('click', async () => {
+    const target = b.dataset.resolve;
+    const picked = panel.querySelector(`input[name="conf-${CSS.escape(target)}"]:checked`);
+    if (!picked) { toast('Pick the winning column first', true); return; }
+    const ids = data.conflicts.find(x => x.targetParameter === target).sourceColumnIds;
+    const winner = Number(picked.value);
+    const loser = ids.find(id => id !== winner);
+    b.disabled = true;
+    try {
+      await post(`/api/v1/mapping/${caseId}/resolve-conflict`, { winnerSourceColumnId: winner, loserSourceColumnId: loser });
+      toast(`Conflict resolved — winner #${winner} keeps ${target}`);
+      renderMappingPanel(caseId);
+    } catch (ex) { b.disabled = false; toast(ex.message, true); }
+  }));
+}
+
+function openRetargetDrawer(caseId, sourceColumnId, data) {
+  const allCols = data.documents.flatMap(d => d.columns);
+  const col = allCols.find(c => c.sourceColumnId === sourceColumnId);
+  if (!col) return;
+  const backdrop = $('#drawer-backdrop'), drawer = $('#drawer');
+  drawer.innerHTML = `
+    <div class="ox-mono-label">RETARGET COLUMN — ${esc(col.header)}</div>
+    <p class="ox-muted" style="font-size:13px">${esc(col.detectedType)} · ${col.nonEmpty} non-empty · ${col.distinct} distinct · doc ${esc(String(col.samples?.[0] ?? ''))}…</p>
+    <div class="ox-ana" style="margin:10px 0">
+      <div class="ox-ana-row"><span class="ox-muted">Current target</span><span class="ox-mono">${esc(col.targetParameter || '—')}</span></div>
+      <div class="ox-ana-row"><span class="ox-muted">Provenance</span><span>${esc(col.provenanceTier || '—')} (conf ${col.confidence != null ? Number(col.confidence).toFixed(2) : '—'})</span></div>
+    </div>
+    <label class="ox-mono-label" for="rt-target">TARGET PARAMETER</label>
+    <select class="ox-select" id="rt-target">
+      <option value="">— none (clear mapping) —</option>
+      ${data.parameters.map(p => `<option value="${esc(p)}" ${col.targetParameter === p ? 'selected' : ''}>${esc(p)}</option>`).join('')}
+    </select>
+    <div class="ox-banner ox-banner--info" style="margin-top:10px">Human decisions pin the mapping — pipeline re-runs keep it and record an audited ColumnMapping row (conf 1.00, HumanConfirmed).</div>
+    <div class="ox-banner ox-banner--error ox-hide" id="rt-error" style="margin-top:8px"></div>
+    <div class="ox-row ox-row--wrap" style="gap:8px;margin-top:12px">
+      <button class="ox-btn ox-btn--primary" id="rt-save">Save decision</button>
+      <button class="ox-btn ox-btn--ghost" id="rt-clear">Clear mapping</button>
+    </div>`;
+  backdrop.classList.remove('ox-hide'); drawer.classList.remove('ox-hide');
+  requestAnimationFrame(() => { backdrop.classList.add('open'); drawer.classList.add('open'); });
+  backdrop.onclick = closeDrawer;
+  const save = async (target) => {
+    const err = $('#rt-error'); err.classList.add('ox-hide');
+    try {
+      await post(`/api/v1/mapping/${caseId}/retarget`, { sourceColumnId, targetParameter: target });
+      closeDrawer();
+      toast(target ? `Saved — ${col.header} → ${target}` : `Cleared — ${col.header}`);
+      renderMappingPanel(caseId);
+    } catch (ex) {
+      if (ex.conflict && ex.conflict.conflictingSourceColumnId) {
+        err.innerHTML = `${esc(ex.message)} <button class="ox-btn ox-btn--danger-ghost ox-btn--sm" id="rt-resolve">Award it to #${ex.conflict.conflictingSourceColumnId} (${esc(ex.conflict.conflictingHeader)})</button>`;
+        err.classList.remove('ox-hide');
+        $('#rt-resolve').addEventListener('click', async () => {
+          try {
+            await post(`/api/v1/mapping/${caseId}/resolve-conflict`, { winnerSourceColumnId: ex.conflict.conflictingSourceColumnId, loserSourceColumnId: sourceColumnId });
+            closeDrawer();
+            toast('Conflict resolved');
+            renderMappingPanel(caseId);
+          } catch (ex2) { err.textContent = ex2.message; }
+        });
+      } else { err.textContent = ex.message; err.classList.remove('ox-hide'); }
+    }
+  };
+  $('#rt-save').addEventListener('click', () => save($('#rt-target').value || null));
+  $('#rt-clear').addEventListener('click', () => save(null));
+}
+
+// ── toast (workbench save feedback) ─────────────────────────────────────────
+let TOAST_TIMER = null;
+function toast(msg, isError = false) {
+  let el = $('#ox-toast');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'ox-toast';
+    el.setAttribute('role', 'status');
+    document.body.appendChild(el);
+  }
+  el.className = `ox-toast${isError ? ' ox-toast--error' : ''}`;
+  el.textContent = msg;
+  requestAnimationFrame(() => el.classList.add('open'));
+  clearTimeout(TOAST_TIMER);
+  TOAST_TIMER = setTimeout(() => el.classList.remove('open'), 3200);
+}
+
 // ── view: exceptions ───────────────────────────────────────────────────────
 async function viewExceptions() {
   $('#pagetitle').textContent = 'Exceptions';
@@ -667,13 +864,16 @@ async function viewExceptions() {
           <td data-th="Fix at">${esc(e.resolutionTarget || '—')}</td>
           <td class="ox-right">${isClinical(e.code)
             ? `<a class="ox-btn ox-btn--primary ox-btn--sm" href="#/coding?case=${e.caseId}">Resolve →</a>`
+            : isMappingExc(e.code)
+            ? `<a class="ox-btn ox-btn--primary ox-btn--sm" href="#/mapping?case=${e.caseId}">Resolve →</a>`
             : e.caseId ? `<a class="ox-btn ox-btn--ghost ox-btn--sm" href="#/case/${e.caseId}">Open →</a>` : ''}</td>
         </tr>`).join('')}</tbody>
     </table></div>`}`;
 }
 
-// clinical codes resolve in the coding workbench, not on the case page
+// clinical codes resolve in the coding workbench; mapping codes in the mapping workbench
 const isClinical = (code) => code === 'EXC-CLIN-UNMAPPED' || code === 'EXC-CLIN-REVIEW';
+const isMappingExc = (code) => typeof code === 'string' && code.startsWith('EXC-MAP-');
 
 // ── view: users (admin) ────────────────────────────────────────────────────
 async function viewUsers() {

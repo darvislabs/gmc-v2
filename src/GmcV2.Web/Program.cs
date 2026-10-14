@@ -35,6 +35,7 @@ public static class Program
         ApiAdmin.MapAll(app);
         ApiCoding.MapAll(app);
         QuoteOverrideApi.Map(app);
+        ApiMapping.MapAll(app);
         Pages.MapAll(app);
 
         app.UseStaticFiles(new StaticFileOptions
