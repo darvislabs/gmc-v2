@@ -1804,6 +1804,34 @@ public async Task AddMasterVersionAsync(PricingMasterVersion v)
 
     // ─────────────────────────── guardrails ───────────────────────────
 
+    public async Task<List<GuardrailRuleDef>> GetAllGuardrailRulesAsync()
+    {
+        await using var conn = await OpenAsync();
+        using var cmd = Cmd(conn, """
+            SELECT RuleCode, RuleName, Category, MetricSelector, Operator, Threshold, Severity, MessageTemplate,
+                   AppliesToExperienceBusiness, PctOfMetric, IsEnabled
+              FROM uw.GuardrailRule ORDER BY GuardrailRuleId
+            """);
+        using var r = await cmd.ExecuteReaderAsync();
+        var list = new List<GuardrailRuleDef>();
+        while (await r.ReadAsync())
+            list.Add(new GuardrailRuleDef
+            {
+                RuleCode = S(r["RuleCode"]),
+                RuleName = S(r["RuleName"]) is { Length: > 0 } rn ? rn : null,
+                Category = S(r["Category"]),
+                MetricSelector = S(r["MetricSelector"]),
+                Operator = S(r["Operator"]),
+                Threshold = D(r["Threshold"]),
+                Severity = S(r["Severity"]),
+                MessageTemplate = S(r["MessageTemplate"]) ?? "",
+                AppliesToExperienceBusiness = B(r["AppliesToExperienceBusiness"]),
+                PctOfMetric = S(r["PctOfMetric"]) is { Length: > 0 } pm ? pm : null,
+                IsEnabled = B(r["IsEnabled"]),
+            });
+        return list;
+    }
+
     public async Task<List<GuardrailRuleDef>> GetGuardrailRulesAsync()
     {
         await using var conn = await OpenAsync();
@@ -1838,14 +1866,17 @@ public async Task AddMasterVersionAsync(PricingMasterVersion v)
                 UPDATE uw.GuardrailRule
                    SET Category = @cat, MetricSelector = @sel, Operator = @op, Threshold = @thr,
                        Severity = @sev, MessageTemplate = @msg, AppliesToExperienceBusiness = @exp,
-                       PctOfMetric = @pct, UpdatedAtUtc = SYSUTCDATETIME()
+                       PctOfMetric = @pct, IsEnabled = @en,
+                       RuleName = COALESCE(@name, RuleName), UpdatedAtUtc = SYSUTCDATETIME()
                  WHERE RuleCode = @code
             ELSE
                 INSERT uw.GuardrailRule (RuleCode, RuleName, Category, MetricSelector, Operator, Threshold,
-                                         Severity, MessageTemplate, AppliesToExperienceBusiness, PctOfMetric)
-                VALUES (@code, @code, @cat, @sel, @op, @thr, @sev, @msg, @exp, @pct);
+                                         Severity, MessageTemplate, AppliesToExperienceBusiness, PctOfMetric, IsEnabled)
+                VALUES (@code, COALESCE(@name, @code), @cat, @sel, @op, @thr, @sev, @msg, @exp, @pct, @en);
             """);
         cmd.Parameters.AddWithValue("@code", rule.RuleCode);
+        cmd.Parameters.AddWithValue("@name", (object?)rule.RuleName ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@en", rule.IsEnabled);
         cmd.Parameters.AddWithValue("@cat", rule.Category);
         cmd.Parameters.AddWithValue("@sel", rule.MetricSelector);
         cmd.Parameters.AddWithValue("@op", rule.Operator);

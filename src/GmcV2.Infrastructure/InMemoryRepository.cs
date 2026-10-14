@@ -889,6 +889,8 @@ public sealed class InMemoryRepository : IGmcRepository
 
     // ─────────────────────────── guardrails ───────────────────────────
 
+        public Task<List<GuardrailRuleDef>> GetAllGuardrailRulesAsync() => GetGuardrailRulesAsync();
+
     public Task<List<GuardrailRuleDef>> GetGuardrailRulesAsync()
     {
         lock (_gate) return Task.FromResult(_guardrailRules

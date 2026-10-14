@@ -98,6 +98,7 @@ public interface IGmcRepository
     // Guardrails
     Task<List<GuardrailRuleDef>> GetGuardrailRulesAsync();
     Task UpsertGuardrailRuleAsync(GuardrailRuleDef r);
+    Task<List<GuardrailRuleDef>> GetAllGuardrailRulesAsync(); // admin view: includes disabled
 
     // Reference
     Task<Dictionary<string, string>> GetPaidStatusMapAsync();

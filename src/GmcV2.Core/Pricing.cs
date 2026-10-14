@@ -85,6 +85,8 @@ public sealed class PricingOverrides
 public sealed class GuardrailRuleDef
 {
     public string RuleCode { get; set; } = "";
+    public string? RuleName { get; set; }
+    public bool IsEnabled { get; set; } = true;
     public string Category { get; set; } = "";
     /// <summary>Selector into the analytics snapshot, e.g. "CoveredLives".</summary>
     public string MetricSelector { get; set; } = "";

@@ -42,6 +42,7 @@ public static class Program
         BenefitDeltaApi.Map(app);
         FinalQuoteApi.Map(app);
         StandardizeApi.Map(app);
+        RuleConfigApi.Map(app);
         Pages.MapAll(app);
 
         app.UseStaticFiles(new StaticFileOptions
