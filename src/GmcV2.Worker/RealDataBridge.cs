@@ -30,8 +30,11 @@ public static class RealDataBridge
             Console.Error.WriteLine($"[RealDataBridge] case {caseId} doc {doc.DocType} ({doc.FileName}): {allRows.Count} raw rows");
 
             // multi-sheet: each sheet carries its own header row — re-detect per sheet,
-            // never blend rows across sheets under a single header.
-            foreach (var sheetGroup in allRows.GroupBy(r => r.SheetName ?? "").OrderBy(g => g.Key, StringComparer.OrdinalIgnoreCase))
+            // never blend rows across sheets under a single header. ProfileProjection is
+            // the Profile stage's demo-shaped snapshot, never source data.
+            foreach (var sheetGroup in allRows
+                .Where(r => r.SheetName != "ProfileProjection")
+                .GroupBy(r => r.SheetName ?? "").OrderBy(g => g.Key, StringComparer.OrdinalIgnoreCase))
             {
                 var rows = sheetGroup.OrderBy(r => r.RowNumber).ToList();
                 if (rows.Count == 0) continue;

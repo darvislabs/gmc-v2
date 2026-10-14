@@ -755,6 +755,15 @@ public sealed partial class SqlRepository : IGmcRepository
         return result;
     }
 
+    public async Task DeleteRawRowsAsync(long documentId, string sheetName)
+    {
+        await using var conn = await OpenAsync();
+        using var cmd = Cmd(conn, "DELETE FROM ing.RawRow WHERE DocumentId = @doc AND SheetName = @sheet");
+        cmd.Parameters.AddWithValue("@doc", documentId);
+        cmd.Parameters.AddWithValue("@sheet", sheetName);
+        await cmd.ExecuteNonQueryAsync();
+    }
+
     public async Task<List<RawRow>> GetRawRowsAsync(long documentId)
     {
         await using var conn = await OpenAsync();

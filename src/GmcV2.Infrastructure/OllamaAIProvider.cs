@@ -129,8 +129,9 @@ public sealed class OllamaAIProvider : IScheduleExtractionAgent, IColumnMappingA
             using var doc = JsonDocument.Parse(await res.Content.ReadAsStringAsync());
             return doc.RootElement.GetProperty("choices")[0].GetProperty("message").GetProperty("content").GetString();
         }
-        catch
+        catch (Exception ex)
         {
+            Console.Error.WriteLine($"[OllamaAI] chat call failed: {ex.GetType().Name}: {ex.Message[..Math.Min(160, ex.Message.Length)]}"); // TEMP diagnostic
             return null; // AD-2: AI failure is advisory only
         }
     }

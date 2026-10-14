@@ -252,7 +252,11 @@ public static class StageHandlers
                     foreach (var m in data.Members)
                         rows.Add(new[] { m.MemberNumber, m.Relationship, m.Gender, m.Age.ToString(), m.Chronic ? "1" : "0" });
 
-                await repo.AddRawRowsAsync(doc.DocumentId, "Sheet1", rows);
+                // Idempotent: clear the projection sheet before re-projecting (demo-snapshot
+                // rows), so repeated runs never compound raw-row growth. Distinct sheet name
+                // so it never collides with a real uploaded sheet.
+                await repo.DeleteRawRowsAsync(doc.DocumentId, "ProfileProjection");
+                await repo.AddRawRowsAsync(doc.DocumentId, "ProfileProjection", rows);
 
                 for (var i = 0; i < headers.Length; i++)
                 {
@@ -419,8 +423,8 @@ public static class StageHandlers
 
             // Idempotent resume: keep human-reviewed codings, re-run the deterministic pass.
             var existing = await repo.GetClaimCodingAsync(c.CaseId);
-            var existingByClaim = existing.Where(x => x.ClaimNumber is not null)
-                .GroupBy(x => x.ClaimNumber!).ToDictionary(g => g.Key, g => g.First());
+            var existingByClaim = existing
+                .GroupBy(x => x.StdClaimId).ToDictionary(g => g.Key, g => g.First());
 
             // AI gap-fill (AD-1/AD-2): only when Clinical is wired and the deterministic
             // tier missed. 20s budget; any failure/timeout/empty result = exact
@@ -623,9 +627,9 @@ public static class StageHandlers
         }
 
         private static async Task SaveCodingAsync(IGmcRepository repo, long caseId, StdClaim claim,
-            Dictionary<string, ClaimCoding> existingByClaim, Action<ClaimCoding> fill)
+            Dictionary<long, ClaimCoding> existingByClaim, Action<ClaimCoding> fill)
         {
-            var cc = existingByClaim.TryGetValue(claim.ClaimNumber, out var prev) && prev.CodingStatus is "HumanAccepted" or "HumanCorrected"
+            var cc = existingByClaim.TryGetValue(claim.StdClaimId, out var prev) && prev.CodingStatus is "HumanAccepted" or "HumanCorrected"
                 ? prev                        // never overwrite a human decision
                 : new ClaimCoding { CaseId = caseId, StdClaimId = claim.StdClaimId };
             cc.ClaimNumber = claim.ClaimNumber;

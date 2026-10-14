@@ -47,6 +47,7 @@ public interface IGmcRepository
 
     // Ingestion
     Task<List<RawRow>> AddRawRowsAsync(long documentId, string sheetName, List<string[]> rows);
+    Task DeleteRawRowsAsync(long documentId, string sheetName);
     Task<List<RawRow>> GetRawRowsAsync(long documentId);
     Task<SourceColumn> AddOrUpdateSourceColumnAsync(SourceColumn col);
     Task<List<SourceColumn>> GetSourceColumnsAsync(long documentId);

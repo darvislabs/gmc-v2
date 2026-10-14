@@ -466,6 +466,16 @@ public sealed class InMemoryRepository : IGmcRepository
 
     // ─────────────────────────── ingestion ───────────────────────────
 
+    public Task DeleteRawRowsAsync(long documentId, string sheetName)
+    {
+        lock (_gate)
+        {
+            if (_rawRows.TryGetValue(documentId, out var list))
+                list.RemoveAll(r => (r.SheetName ?? "") == sheetName);
+        }
+        return Task.CompletedTask;
+    }
+
     public Task<List<RawRow>> AddRawRowsAsync(long documentId, string sheetName, List<string[]> rows)
     {
         lock (_gate)
