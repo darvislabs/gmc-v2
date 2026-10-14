@@ -561,6 +561,29 @@ public sealed class InMemoryRepository : IGmcRepository
     public Task<List<(string ChannelType, decimal DefaultRatePct, decimal MinRatePct, decimal MaxRatePct)>> GetCommissionScheduleAsync()
         => Task.FromResult(new List<(string, decimal, decimal, decimal)> { ("Default", 7.5m, 0m, 15m) });
 
+    private readonly List<BenefitCostingRow> _benefitCosting = new();
+    private readonly List<CommissionRow> _commission = new();
+    private readonly List<StandardLoadingRow> _standardLoading = new();
+
+    public Task UpsertBenefitCostingAsync(BenefitCostingRow m)
+    {
+        lock (_gate) { var i = _benefitCosting.FindIndex(x => x.MasterVersionId == m.MasterVersionId && x.BenefitCode == m.BenefitCode); if (i >= 0) _benefitCosting[i] = m; else _benefitCosting.Add(m); }
+        return Task.CompletedTask;
+    }
+    public Task UpsertCommissionAsync(CommissionRow m)
+    {
+        lock (_gate) { var i = _commission.FindIndex(x => x.MasterVersionId == m.MasterVersionId && x.ChannelType == m.ChannelType); if (i >= 0) _commission[i] = m; else _commission.Add(m); }
+        return Task.CompletedTask;
+    }
+    public Task UpsertStandardLoadingAsync(StandardLoadingRow m)
+    {
+        lock (_gate) { var i = _standardLoading.FindIndex(x => x.MasterVersionId == m.MasterVersionId && x.LoadingName == m.LoadingName); if (i >= 0) _standardLoading[i] = m; else _standardLoading.Add(m); }
+        return Task.CompletedTask;
+    }
+    public Task<List<BenefitCostingRow>> GetBenefitCostingAsync(int mv) { lock (_gate) return Task.FromResult(_benefitCosting.Where(x => x.MasterVersionId == mv).ToList()); }
+    public Task<List<CommissionRow>> GetCommissionMasterAsync(int mv) { lock (_gate) return Task.FromResult(_commission.Where(x => x.MasterVersionId == mv).ToList()); }
+    public Task<List<StandardLoadingRow>> GetStandardLoadingAsync(int mv) { lock (_gate) return Task.FromResult(_standardLoading.Where(x => x.MasterVersionId == mv).ToList()); }
+
     // ── commercial discount loop (prototype v74 step 8) ───────────────────
 
     private readonly List<DiscountRequestRow> _discounts = new();

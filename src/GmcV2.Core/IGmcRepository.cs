@@ -63,6 +63,14 @@ public interface IGmcRepository
     Task<DiscountRequestRow?> GetDiscountRequestAsync(long id);
     Task<List<(string ChannelType, decimal DefaultRatePct, decimal MinRatePct, decimal MaxRatePct)>> GetCommissionScheduleAsync();
 
+    // Excel masters upload (prototype §7 UW master structure)
+    Task UpsertBenefitCostingAsync(BenefitCostingRow r);
+    Task UpsertCommissionAsync(CommissionRow r);
+    Task UpsertStandardLoadingAsync(StandardLoadingRow r);
+    Task<List<BenefitCostingRow>> GetBenefitCostingAsync(int masterVersionId);
+    Task<List<CommissionRow>> GetCommissionMasterAsync(int masterVersionId);
+    Task<List<StandardLoadingRow>> GetStandardLoadingAsync(int masterVersionId);
+
     // Analytics persistence (prototype §5)
     Task<long> SaveAnalyticsSnapshotAsync(long caseId, AnalyticsSnapshot snap, long? stageRunId);
     Task SaveAnalyticsBreakdownsAsync(long snapshotId, IReadOnlyList<AnalyticsBreakdownRow> rows);

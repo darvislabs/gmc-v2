@@ -43,6 +43,7 @@ public static class Program
         FinalQuoteApi.Map(app);
         StandardizeApi.Map(app);
         RuleConfigApi.Map(app);
+        MastersUploadApi.Map(app);
         Pages.MapAll(app);
 
         app.UseStaticFiles(new StaticFileOptions

@@ -1004,6 +1004,131 @@ public sealed partial class SqlRepository : IGmcRepository
         return list;
     }
 
+    // ── Excel masters upload (prototype §7) ───────────────────────────────
+
+    public async Task UpsertBenefitCostingAsync(BenefitCostingRow m)
+    {
+        await using var conn = await OpenAsync();
+        using var cmd = Cmd(conn, """
+            ;IF EXISTS (SELECT 1 FROM uw.BenefitCostingMaster WHERE PricingMasterVersionId = @mv AND BenefitCode = @code)
+                UPDATE uw.BenefitCostingMaster SET UtilizationRate=@util, SeverityCaptureRate=@sev, IncidenceRate=@inc,
+                     SeverityAmount=@amt, FactorPct=@fac, ExperienceCredibilityPct=@cred, AttributionFactor=@attr
+                 WHERE PricingMasterVersionId = @mv AND BenefitCode = @code
+            ELSE
+                INSERT uw.BenefitCostingMaster (PricingMasterVersionId, BenefitCode, UtilizationRate, SeverityCaptureRate,
+                     IncidenceRate, SeverityAmount, FactorPct, ExperienceCredibilityPct, AttributionFactor)
+                VALUES (@mv, @code, @util, @sev, @inc, @amt, @fac, @cred, @attr);
+            """);
+        cmd.Parameters.AddWithValue("@mv", m.MasterVersionId);
+        cmd.Parameters.AddWithValue("@code", m.BenefitCode);
+        cmd.Parameters.AddWithValue("@util", m.UtilizationRate);
+        cmd.Parameters.AddWithValue("@sev", m.SeverityCaptureRate);
+        cmd.Parameters.AddWithValue("@inc", m.IncidenceRate);
+        cmd.Parameters.AddWithValue("@amt", m.SeverityAmount);
+        cmd.Parameters.AddWithValue("@fac", m.FactorPct);
+        cmd.Parameters.AddWithValue("@cred", m.ExperienceCredibilityPct);
+        cmd.Parameters.AddWithValue("@attr", m.AttributionFactor);
+        await cmd.ExecuteNonQueryAsync();
+    }
+
+    public async Task UpsertCommissionAsync(CommissionRow m)
+    {
+        await using var conn = await OpenAsync();
+        using var cmd = Cmd(conn, """
+            ;IF EXISTS (SELECT 1 FROM uw.CommissionMaster WHERE PricingMasterVersionId = @mv AND ChannelType = @ch)
+                UPDATE uw.CommissionMaster SET DefaultRatePct=@def, MinRatePct=@min, MaxRatePct=@max, IsActive=@act
+                 WHERE PricingMasterVersionId = @mv AND ChannelType = @ch
+            ELSE
+                INSERT uw.CommissionMaster (PricingMasterVersionId, ChannelType, DefaultRatePct, MinRatePct, MaxRatePct, IsActive)
+                VALUES (@mv, @ch, @def, @min, @max, @act);
+            """);
+        cmd.Parameters.AddWithValue("@mv", m.MasterVersionId);
+        cmd.Parameters.AddWithValue("@ch", m.ChannelType);
+        cmd.Parameters.AddWithValue("@def", m.DefaultRatePct);
+        cmd.Parameters.AddWithValue("@min", m.MinRatePct);
+        cmd.Parameters.AddWithValue("@max", m.MaxRatePct);
+        cmd.Parameters.AddWithValue("@act", m.IsActive);
+        await cmd.ExecuteNonQueryAsync();
+    }
+
+    public async Task UpsertStandardLoadingAsync(StandardLoadingRow m)
+    {
+        await using var conn = await OpenAsync();
+        using var cmd = Cmd(conn, """
+            ;IF EXISTS (SELECT 1 FROM uw.StandardLoadingMaster WHERE PricingMasterVersionId = @mv AND LoadingName = @nm)
+                UPDATE uw.StandardLoadingMaster SET Value = @val WHERE PricingMasterVersionId = @mv AND LoadingName = @nm
+            ELSE
+                INSERT uw.StandardLoadingMaster (PricingMasterVersionId, LoadingName, Value) VALUES (@mv, @nm, @val);
+            """);
+        cmd.Parameters.AddWithValue("@mv", m.MasterVersionId);
+        cmd.Parameters.AddWithValue("@nm", m.LoadingName);
+        cmd.Parameters.AddWithValue("@val", m.Value);
+        await cmd.ExecuteNonQueryAsync();
+    }
+
+    public async Task<List<BenefitCostingRow>> GetBenefitCostingAsync(int masterVersionId)
+    {
+        await using var conn = await OpenAsync();
+        using var cmd = Cmd(conn, "SELECT BenefitCostingMasterId, PricingMasterVersionId, BenefitCode, UtilizationRate, SeverityCaptureRate, IncidenceRate, SeverityAmount, FactorPct, ExperienceCredibilityPct, AttributionFactor FROM uw.BenefitCostingMaster WHERE PricingMasterVersionId = @mv ORDER BY BenefitCode");
+        cmd.Parameters.AddWithValue("@mv", masterVersionId);
+        using var r = await cmd.ExecuteReaderAsync();
+        var list = new List<BenefitCostingRow>();
+        while (await r.ReadAsync())
+            list.Add(new BenefitCostingRow
+            {
+                BenefitCostingMasterId = L(r["BenefitCostingMasterId"]),
+                MasterVersionId = I(r["PricingMasterVersionId"]),
+                BenefitCode = S(r["BenefitCode"]) ?? "",
+                UtilizationRate = D(r["UtilizationRate"]),
+                SeverityCaptureRate = D(r["SeverityCaptureRate"]),
+                IncidenceRate = D(r["IncidenceRate"]),
+                SeverityAmount = D(r["SeverityAmount"]),
+                FactorPct = D(r["FactorPct"]),
+                ExperienceCredibilityPct = D(r["ExperienceCredibilityPct"]),
+                AttributionFactor = D(r["AttributionFactor"]),
+            });
+        return list;
+    }
+
+    public async Task<List<CommissionRow>> GetCommissionMasterAsync(int masterVersionId)
+    {
+        await using var conn = await OpenAsync();
+        using var cmd = Cmd(conn, "SELECT CommissionMasterId, PricingMasterVersionId, ChannelType, DefaultRatePct, MinRatePct, MaxRatePct, IsActive FROM uw.CommissionMaster WHERE PricingMasterVersionId = @mv ORDER BY CommissionMasterId");
+        cmd.Parameters.AddWithValue("@mv", masterVersionId);
+        using var r = await cmd.ExecuteReaderAsync();
+        var list = new List<CommissionRow>();
+        while (await r.ReadAsync())
+            list.Add(new CommissionRow
+            {
+                CommissionMasterId = L(r["CommissionMasterId"]),
+                MasterVersionId = I(r["PricingMasterVersionId"]),
+                ChannelType = S(r["ChannelType"]) ?? "",
+                DefaultRatePct = D(r["DefaultRatePct"]),
+                MinRatePct = D(r["MinRatePct"]),
+                MaxRatePct = D(r["MaxRatePct"]),
+                IsActive = B(r["IsActive"]),
+            });
+        return list;
+    }
+
+    public async Task<List<StandardLoadingRow>> GetStandardLoadingAsync(int masterVersionId)
+    {
+        await using var conn = await OpenAsync();
+        using var cmd = Cmd(conn, "SELECT StandardLoadingMasterId, PricingMasterVersionId, LoadingName, Value FROM uw.StandardLoadingMaster WHERE PricingMasterVersionId = @mv ORDER BY StandardLoadingMasterId");
+        cmd.Parameters.AddWithValue("@mv", masterVersionId);
+        using var r = await cmd.ExecuteReaderAsync();
+        var list = new List<StandardLoadingRow>();
+        while (await r.ReadAsync())
+            list.Add(new StandardLoadingRow
+            {
+                StandardLoadingMasterId = L(r["StandardLoadingMasterId"]),
+                MasterVersionId = I(r["PricingMasterVersionId"]),
+                LoadingName = S(r["LoadingName"]) ?? "",
+                Value = D(r["Value"]),
+            });
+        return list;
+    }
+
     public async Task<long> SaveAnalyticsSnapshotAsync(long caseId, AnalyticsSnapshot snap, long? stageRunId)
     {
         await using var conn = await OpenAsync();

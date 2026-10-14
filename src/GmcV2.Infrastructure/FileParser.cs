@@ -81,7 +81,9 @@ public static class FileParser
         try
         {
             var text = Encoding.UTF8.GetString(content);
-            if (text.StartsWith("\uFEFF")) text = text[1..]; // strip BOM
+            // Robust BOM strip: check the first CODEPOINT. (A StartsWith("\uFEFF") check here
+            // mis-fired on plain-ASCII input and consumed the first character of every CSV.)
+            if (text.Length > 0 && text[0] == '﻿') text = text[1..];
             var doc = new ParsedDocument { FileName = "", Format = "csv" };
             var sheet = new ParsedSheet { SheetName = "Sheet1" };
             foreach (var row in ParseCsvLines(text, delimiter))

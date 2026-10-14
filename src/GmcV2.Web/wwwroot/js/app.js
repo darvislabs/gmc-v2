@@ -1085,6 +1085,14 @@ async function viewAdmin() {
       <div class="ox-card">
         <div class="ox-mono-label">PRICING MASTERS</div>
         <div class="ox-table-wrap"><table class="ox-table"><thead><tr><th>Version</th><th>Status</th><th>From</th><th>To</th></tr></thead><tbody>${masterRows}</tbody></table></div>
+        <div class="ox-hr"></div>
+        <div class="ox-mono-label">EXCEL MASTERS UPLOAD</div>
+        <p class="ox-muted" style="font-size:12px">Sheets: <span class="ox-mono">BenefitCosting</span> · <span class="ox-mono">Commission</span> · <span class="ox-mono">StandardLoading</span>. Rows upsert into the active master version.</p>
+        <div class="ox-row" style="margin-top:8px;gap:8px;align-items:center">
+          <input type="file" id="mx-file" accept=".xlsx,.csv" class="ox-input" style="max-width:280px">
+          <button class="ox-btn ox-btn--primary ox-btn--sm" id="mx-upload">Upload masters</button>
+          <span id="mx-result" class="ox-muted" style="font-size:12px"></span>
+        </div>
       </div>
     </div>
     <div class="ox-card" style="margin-top:16px">
@@ -1114,6 +1122,18 @@ async function viewAdmin() {
       route();
     } catch (ex) { alert('Toggle failed: ' + ex.message); }
   }));
+  $('#mx-upload').addEventListener('click', async () => {
+    const f = $('#mx-file').files[0];
+    if (!f) { alert('Choose a masters workbook first.'); return; }
+    const fd = new FormData(); fd.append('file', f);
+    try {
+      const res = await fetch('/api/v1/admin/masters/upload', { method: 'POST', body: fd, credentials: 'same-origin' });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || res.statusText);
+      const parts = Object.entries(d.sheets || {}).map(([k, v]) => `${k}: ${v >= 0 ? v + ' rows' : 'skipped'}`);
+      $('#mx-result').textContent = parts.join(' · ') || 'no sheets matched';
+    } catch (ex) { alert('Upload failed: ' + ex.message); }
+  });
 }
 
 // ── view: about ────────────────────────────────────────────────────────────
