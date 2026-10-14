@@ -991,6 +991,235 @@ public sealed partial class SqlRepository : IGmcRepository
         return list;
     }
 
+    // ── analytics persistence (prototype §5) ──────────────────────────────
+
+    public async Task<long> SaveAnalyticsSnapshotAsync(long caseId, AnalyticsSnapshot snap, long? stageRunId)
+    {
+        await using var conn = await OpenAsync();
+        using var cmd = Cmd(conn, """
+            INSERT uw.AnalyticsSnapshot (CaseId, CaseStageRunId, SnapshotVersion, IsCurrent,
+                CoveredLives, EmployeeCount, ClaimCount, PaidClaimCount, RejectedClaimCount,
+                TotalClaimedAmount, TotalApprovedAmount, TotalSanctionedAmount, TotalPaidAmount,
+                TotalOutstandingAmount, TotalIncurredAmount, AverageClaimAmount, MedianClaimAmount,
+                ClaimFrequencyPer100, ClaimantIncidencePct, ClaimCostPerLife, BurnCostPerLife,
+                LargeClaimCostSharePct, Top5ClaimSharePct, SingleLargestClaimSharePct,
+                ClaimVolatilityCv, ChronicPrevalencePct, MaternitySharePct, NonNetworkCostSharePct,
+                ParentSharePct, Age55PlusSharePct, AverageAge, TrendNarrative, MetricsJson, CreatedAtUtc)
+            OUTPUT INSERTED.AnalyticsSnapshotId
+            VALUES (@case, @run, 1, 1, @lives, @emps, @claims, @paid, @rej, @claimed, @approved, @sanc,
+                @paidAmt, @outst, @incurred, @avgClaim, @medClaim, @freq, @incid, @cpl, @burn,
+                @large, @top5, @single, @cv, @chronic, @mat, @nonet, @parent, @senior, @avgAge,
+                @narr, @metrics, SYSUTCDATETIME())
+            """);
+        cmd.Parameters.AddWithValue("@case", caseId);
+        cmd.Parameters.AddWithValue("@run", (object?)stageRunId ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@lives", snap.CoveredLives);
+        cmd.Parameters.AddWithValue("@emps", snap.EmployeeCount);
+        cmd.Parameters.AddWithValue("@claims", snap.ClaimCount);
+        cmd.Parameters.AddWithValue("@paid", snap.PaidClaimCount);
+        cmd.Parameters.AddWithValue("@rej", snap.RejectedClaimCount);
+        cmd.Parameters.AddWithValue("@claimed", snap.AmountClaimed);
+        cmd.Parameters.AddWithValue("@approved", snap.AmountApproved);
+        cmd.Parameters.AddWithValue("@sanc", snap.AmountSanctioned);
+        cmd.Parameters.AddWithValue("@paidAmt", snap.AmountPaid);
+        cmd.Parameters.AddWithValue("@outst", snap.AmountOutstanding);
+        cmd.Parameters.AddWithValue("@incurred", snap.AmountIncurred);
+        cmd.Parameters.AddWithValue("@avgClaim", snap.AvgClaimSize);
+        cmd.Parameters.AddWithValue("@medClaim", snap.MedianClaimSize);
+        cmd.Parameters.AddWithValue("@freq", snap.FrequencyPer100);
+        cmd.Parameters.AddWithValue("@incid", snap.ClaimantIncidencePct);
+        cmd.Parameters.AddWithValue("@cpl", snap.CostPerLife);
+        cmd.Parameters.AddWithValue("@burn", snap.BurnCostPerLife);
+        cmd.Parameters.AddWithValue("@large", snap.LargeClaimSharePct);
+        cmd.Parameters.AddWithValue("@top5", snap.Top5ClaimSharePct);
+        cmd.Parameters.AddWithValue("@single", snap.SingleLargestSharePct);
+        cmd.Parameters.AddWithValue("@cv", snap.VolatilityCv);
+        cmd.Parameters.AddWithValue("@chronic", snap.ChronicPrevalencePct);
+        cmd.Parameters.AddWithValue("@mat", snap.MaternitySharePct);
+        cmd.Parameters.AddWithValue("@nonet", snap.NonNetworkSharePct);
+        cmd.Parameters.AddWithValue("@parent", snap.ParentSharePct);
+        cmd.Parameters.AddWithValue("@senior", snap.SeniorAgeSharePct);
+        cmd.Parameters.AddWithValue("@avgAge", snap.AvgAge);
+        cmd.Parameters.AddWithValue("@narr", (object?)snap.TrendNarrative ?? DBNull.Value);
+        var metrics = new Dictionary<string, decimal>();
+        foreach (var (k, v) in snap.ByAgeBand) metrics[$"age:{k}"] = v;
+        foreach (var (k, v) in snap.ByRelationship) metrics[$"rel:{k}"] = v;
+        foreach (var (k, v) in snap.ByDiseaseGroup) metrics[$"dis:{k}"] = v;
+        cmd.Parameters.AddWithValue("@metrics", JsonSerializer.Serialize(metrics));
+        return L(await cmd.ExecuteScalarAsync());
+    }
+
+    public async Task SaveAnalyticsBreakdownsAsync(long snapshotId, IReadOnlyList<AnalyticsBreakdownRow> rows)
+    {
+        await using var conn = await OpenAsync();
+        await using var tx = (SqlTransaction)await conn.BeginTransactionAsync();
+        using (var del = Cmd(conn, "DELETE FROM uw.AnalyticsBreakdown WHERE AnalyticsSnapshotId = @sid"))
+        { del.Transaction = tx; del.Parameters.AddWithValue("@sid", snapshotId); await del.ExecuteNonQueryAsync(); }
+        foreach (var r in rows)
+        {
+            using var cmd = Cmd(conn, """
+                INSERT uw.AnalyticsBreakdown (AnalyticsSnapshotId, Dimension, DimensionValue, Lives,
+                     ClaimCount, PaidAmount, IncurredAmount, FrequencyPer100, CostSharePct, AverageClaimAmount)
+                VALUES (@sid, @dim, @val, @lives, @cnt, @paid, @inc, @freq, @share, @avg)
+                """);
+            cmd.Transaction = tx;
+            cmd.Parameters.AddWithValue("@sid", snapshotId);
+            cmd.Parameters.AddWithValue("@dim", r.Dimension);
+            cmd.Parameters.AddWithValue("@val", r.DimensionValue);
+            cmd.Parameters.AddWithValue("@lives", r.Lives);
+            cmd.Parameters.AddWithValue("@cnt", r.ClaimCount);
+            cmd.Parameters.AddWithValue("@paid", r.PaidAmount);
+            cmd.Parameters.AddWithValue("@inc", r.IncurredAmount);
+            cmd.Parameters.AddWithValue("@freq", r.FrequencyPer100);
+            cmd.Parameters.AddWithValue("@share", r.CostSharePct);
+            cmd.Parameters.AddWithValue("@avg", r.AverageClaimAmount);
+            await cmd.ExecuteNonQueryAsync();
+        }
+        await tx.CommitAsync();
+    }
+
+    public async Task<AnalyticsSnapshot?> GetAnalyticsSnapshotAsync(long caseId)
+    {
+        await using var conn = await OpenAsync();
+        using var cmd = Cmd(conn, """
+            SELECT TOP 1 AnalyticsSnapshotId, CoveredLives, EmployeeCount, ClaimCount, PaidClaimCount,
+                   RejectedClaimCount, TotalClaimedAmount, TotalIncurredAmount, TotalPaidAmount,
+                   TotalOutstandingAmount, AverageClaimAmount, MedianClaimAmount, ClaimFrequencyPer100,
+                   ClaimantIncidencePct, ClaimCostPerLife, BurnCostPerLife, LargeClaimCostSharePct,
+                   Top5ClaimSharePct, SingleLargestClaimSharePct, ClaimVolatilityCv, ChronicPrevalencePct,
+                   MaternitySharePct, NonNetworkCostSharePct, ParentSharePct, Age55PlusSharePct,
+                   AverageAge, TrendNarrative, MetricsJson
+              FROM uw.AnalyticsSnapshot WHERE CaseId = @case AND IsCurrent = 1
+             ORDER BY AnalyticsSnapshotId DESC
+            """);
+        cmd.Parameters.AddWithValue("@case", caseId);
+        using var r = await cmd.ExecuteReaderAsync();
+        if (!await r.ReadAsync()) return null;
+        var snap = new AnalyticsSnapshot
+        {
+            CoveredLives = I(r["CoveredLives"]),
+            EmployeeCount = I(r["EmployeeCount"]),
+            ClaimCount = I(r["ClaimCount"]),
+            PaidClaimCount = I(r["PaidClaimCount"]),
+            RejectedClaimCount = I(r["RejectedClaimCount"]),
+            AmountClaimed = D(r["TotalClaimedAmount"]),
+            AmountIncurred = D(r["TotalIncurredAmount"]),
+            AmountPaid = D(r["TotalPaidAmount"]),
+            AmountOutstanding = D(r["TotalOutstandingAmount"]),
+            AvgClaimSize = D(r["AverageClaimAmount"]),
+            MedianClaimSize = D(r["MedianClaimAmount"]),
+            FrequencyPer100 = D(r["ClaimFrequencyPer100"]),
+            ClaimantIncidencePct = D(r["ClaimantIncidencePct"]),
+            CostPerLife = D(r["ClaimCostPerLife"]),
+            BurnCostPerLife = D(r["BurnCostPerLife"]),
+            LargeClaimSharePct = D(r["LargeClaimCostSharePct"]),
+            Top5ClaimSharePct = D(r["Top5ClaimSharePct"]),
+            SingleLargestSharePct = D(r["SingleLargestClaimSharePct"]),
+            VolatilityCv = D(r["ClaimVolatilityCv"]),
+            ChronicPrevalencePct = D(r["ChronicPrevalencePct"]),
+            MaternitySharePct = D(r["MaternitySharePct"]),
+            NonNetworkSharePct = D(r["NonNetworkCostSharePct"]),
+            ParentSharePct = D(r["ParentSharePct"]),
+            SeniorAgeSharePct = D(r["Age55PlusSharePct"]),
+            AvgAge = D(r["AverageAge"]),
+            TrendNarrative = S(r["TrendNarrative"]) is { Length: > 0 } tn ? tn : null,
+        };
+        var metrics = S(r["MetricsJson"]);
+        if (metrics is { Length: > 2 })
+        {
+            try
+            {
+                using var doc = JsonDocument.Parse(metrics);
+                foreach (var p in doc.RootElement.EnumerateObject())
+                {
+                    var v = p.Value.GetDecimal();
+                    if (p.Name.StartsWith("age:", StringComparison.Ordinal)) snap.ByAgeBand[p.Name[4..]] = v;
+                    else if (p.Name.StartsWith("rel:", StringComparison.Ordinal)) snap.ByRelationship[p.Name[4..]] = v;
+                    else if (p.Name.StartsWith("dis:", StringComparison.Ordinal)) snap.ByDiseaseGroup[p.Name[4..]] = v;
+                }
+            }
+            catch { /* metrics optional */ }
+        }
+        return snap;
+    }
+
+    public async Task<List<AnalyticsBreakdownRow>> GetAnalyticsBreakdownsAsync(long snapshotId)
+    {
+        await using var conn = await OpenAsync();
+        using var cmd = Cmd(conn, """
+            SELECT AnalyticsBreakdownId, AnalyticsSnapshotId, Dimension, DimensionValue, Lives,
+                   ClaimCount, PaidAmount, IncurredAmount, FrequencyPer100, CostSharePct, AverageClaimAmount
+              FROM uw.AnalyticsBreakdown WHERE AnalyticsSnapshotId = @sid ORDER BY AnalyticsBreakdownId
+            """);
+        cmd.Parameters.AddWithValue("@sid", snapshotId);
+        using var r = await cmd.ExecuteReaderAsync();
+        return await ReadBreakdownsAsync(r);
+    }
+
+    public async Task<AnalyticsBreakdownRow?> GetAnalyticsBreakdownForCaseAsync(long caseId, string dimension)
+    {
+        await using var conn = await OpenAsync();
+        using var cmd = Cmd(conn, """
+            SELECT TOP 1 b.AnalyticsBreakdownId, b.AnalyticsSnapshotId, b.Dimension, b.DimensionValue, b.Lives,
+                   b.ClaimCount, b.PaidAmount, b.IncurredAmount, b.FrequencyPer100, b.CostSharePct, b.AverageClaimAmount
+              FROM uw.AnalyticsBreakdown b
+              JOIN uw.AnalyticsSnapshot s ON s.AnalyticsSnapshotId = b.AnalyticsSnapshotId
+             WHERE s.CaseId = @case AND s.IsCurrent = 1 AND b.Dimension = @dim
+             ORDER BY b.CostSharePct DESC
+            """);
+        cmd.Parameters.AddWithValue("@case", caseId);
+        cmd.Parameters.AddWithValue("@dim", dimension);
+        using var r = await cmd.ExecuteReaderAsync();
+        return (await ReadBreakdownsAsync(r)).FirstOrDefault();
+    }
+
+    private static async Task<List<AnalyticsBreakdownRow>> ReadBreakdownsAsync(SqlDataReader r)
+    {
+        var list = new List<AnalyticsBreakdownRow>();
+        while (await r.ReadAsync())
+            list.Add(new AnalyticsBreakdownRow
+            {
+                AnalyticsBreakdownId = L(r["AnalyticsBreakdownId"]),
+                AnalyticsSnapshotId = L(r["AnalyticsSnapshotId"]),
+                Dimension = S(r["Dimension"]) ?? "",
+                DimensionValue = S(r["DimensionValue"]) ?? "",
+                Lives = I(r["Lives"]),
+                ClaimCount = I(r["ClaimCount"]),
+                PaidAmount = D(r["PaidAmount"]),
+                IncurredAmount = D(r["IncurredAmount"]),
+                FrequencyPer100 = D(r["FrequencyPer100"]),
+                CostSharePct = D(r["CostSharePct"]),
+                AverageClaimAmount = D(r["AverageClaimAmount"]),
+            });
+        return list;
+    }
+
+    public async Task<List<CompetitorQuoteRow>> GetCompetitorQuotesForCaseAsync(long caseId)
+    {
+        await using var conn = await OpenAsync();
+        using var cmd = Cmd(conn, """
+            SELECT CompetitorQuoteId, CaseId, CompetitorName, CoveredLives, RatePerLife,
+                   PremiumBeforeGst, PremiumInclGst, ExtractionConfidence
+              FROM uw.CompetitorQuote WHERE CaseId = @case ORDER BY CompetitorQuoteId
+            """);
+        cmd.Parameters.AddWithValue("@case", caseId);
+        using var r = await cmd.ExecuteReaderAsync();
+        var list = new List<CompetitorQuoteRow>();
+        while (await r.ReadAsync())
+            list.Add(new CompetitorQuoteRow
+            {
+                CompetitorQuoteId = L(r["CompetitorQuoteId"]),
+                CaseId = L(r["CaseId"]),
+                Name = S(r["CompetitorName"]) ?? "",
+                CoveredLives = I(r["CoveredLives"]),
+                SumInsured = 0m,
+                Premium = D(r["PremiumInclGst"]),
+                RatePerLife = D(r["RatePerLife"]),
+                ExtractionConfidence = D(r["ExtractionConfidence"]),
+            });
+        return list;
+    }
+
     public async Task<List<RawRow>> GetRawRowsAsync(long documentId)
     {
         await using var conn = await OpenAsync();

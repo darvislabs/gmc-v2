@@ -75,6 +75,7 @@ public sealed class AnalyticsSnapshot
     public decimal ParentSharePct { get; set; }
     public decimal SeniorAgeSharePct { get; set; } // 55+
     public decimal AvgAge { get; set; }
+    public string? TrendNarrative { get; set; } // AI trend summary (§5 LLM panel); deterministic summary when AI off
     public Dictionary<string, decimal> ByAgeBand { get; set; } = new();
     public Dictionary<string, decimal> ByRelationship { get; set; } = new();
     public Dictionary<string, decimal> ByDiseaseGroup { get; set; } = new();

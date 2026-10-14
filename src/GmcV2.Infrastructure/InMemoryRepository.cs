@@ -525,6 +525,39 @@ public sealed class InMemoryRepository : IGmcRepository
     public Task<PricingMasterVersion?> GetActivePricingMasterAsync()
         => Task.FromResult<PricingMasterVersion?>(null);
 
+    // ── analytics persistence (prototype §5) ──────────────────────────────
+
+    private readonly Dictionary<long, AnalyticsSnapshot> _analytics = new();
+    private readonly Dictionary<long, List<AnalyticsBreakdownRow>> _analyticsBreakdowns = new();
+    private long _analyticsSeq;
+
+    public Task<long> SaveAnalyticsSnapshotAsync(long caseId, AnalyticsSnapshot snap, long? stageRunId)
+    {
+        lock (_gate) { var id = ++_analyticsSeq; _analytics[caseId] = snap; return Task.FromResult(id); }
+    }
+
+    public Task SaveAnalyticsBreakdownsAsync(long snapshotId, IReadOnlyList<AnalyticsBreakdownRow> rows)
+    {
+        lock (_gate) _analyticsBreakdowns[snapshotId] = rows.ToList();
+        return Task.CompletedTask;
+    }
+
+    public Task<AnalyticsSnapshot?> GetAnalyticsSnapshotAsync(long caseId)
+    {
+        lock (_gate) return Task.FromResult(_analytics.TryGetValue(caseId, out var s) ? s : null);
+    }
+
+    public Task<List<AnalyticsBreakdownRow>> GetAnalyticsBreakdownsAsync(long snapshotId)
+    {
+        lock (_gate) return Task.FromResult(_analyticsBreakdowns.TryGetValue(snapshotId, out var l) ? l.ToList() : new List<AnalyticsBreakdownRow>());
+    }
+
+    public Task<AnalyticsBreakdownRow?> GetAnalyticsBreakdownForCaseAsync(long caseId, string dimension)
+        => Task.FromResult<AnalyticsBreakdownRow?>(null);
+
+    public Task<List<CompetitorQuoteRow>> GetCompetitorQuotesForCaseAsync(long caseId)
+        => Task.FromResult(new List<CompetitorQuoteRow>());
+
     // ── commercial discount loop (prototype v74 step 8) ───────────────────
 
     private readonly List<DiscountRequestRow> _discounts = new();

@@ -38,6 +38,8 @@ public static class Program
         SIScenarioApi.Map(app);
         ApiMapping.MapAll(app);
         DiscountApi.Map(app);
+        AnalyticsApi.Map(app);
+        BenefitDeltaApi.Map(app);
         Pages.MapAll(app);
 
         app.UseStaticFiles(new StaticFileOptions

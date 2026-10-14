@@ -11,7 +11,7 @@ namespace GmcV2.Worker;
 /// real GmcV2.Calculation / GmcV2.Knowledge engines when those projects are
 /// built and falls back to deterministic local implementations otherwise.
 /// </summary>
-public static class StageHandlers
+public static partial class StageHandlers
 {
     public static IStageHandler[] Demo(IAIProviderRegistry? ai = null) => new IStageHandler[]
     {
@@ -682,11 +682,12 @@ public static class StageHandlers
     {
         public string Stage => "Analyze";
 
-        public Task<StageOutcome> ExecuteAsync(Case c, IGmcRepository repo)
+        public async Task<StageOutcome> ExecuteAsync(Case c, IGmcRepository repo)
         {
             var data = DemoPipelineData.For(c.CaseId);
             var snapshot = EngineBridge.ComputeAnalytics(StdMembers(data), StdClaims(data));
-            return Task.FromResult(new StageOutcome
+            await PersistAnalyticsAsync(repo, c.CaseId, snapshot, null);
+            return new StageOutcome
             {
                 DetailJson = JsonSerializer.Serialize(new Dictionary<string, object?>
                 {
@@ -694,7 +695,7 @@ public static class StageHandlers
                     ["dqScore"] = data.DataQualityScore,
                     ["mappingConfidence"] = data.MappingConfidence,
                 }),
-            });
+            };
         }
     }
 

@@ -61,6 +61,14 @@ public interface IGmcRepository
     Task<DiscountRequestRow> SaveDiscountRequestAsync(DiscountRequestRow row);
     Task<List<DiscountRequestRow>> GetDiscountRequestsAsync(long caseId);
     Task<DiscountRequestRow?> GetDiscountRequestAsync(long id);
+
+    // Analytics persistence (prototype §5)
+    Task<long> SaveAnalyticsSnapshotAsync(long caseId, AnalyticsSnapshot snap, long? stageRunId);
+    Task SaveAnalyticsBreakdownsAsync(long snapshotId, IReadOnlyList<AnalyticsBreakdownRow> rows);
+    Task<AnalyticsSnapshot?> GetAnalyticsSnapshotAsync(long caseId);
+    Task<List<AnalyticsBreakdownRow>> GetAnalyticsBreakdownsAsync(long snapshotId);
+    Task<AnalyticsBreakdownRow?> GetAnalyticsBreakdownForCaseAsync(long caseId, string dimension);
+    Task<List<CompetitorQuoteRow>> GetCompetitorQuotesForCaseAsync(long caseId);
     Task<List<RawRow>> GetRawRowsAsync(long documentId);
     Task<SourceColumn> AddOrUpdateSourceColumnAsync(SourceColumn col);
     Task<List<SourceColumn>> GetSourceColumnsAsync(long documentId);
