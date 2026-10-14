@@ -1,13 +1,37 @@
 using GmcV2.Core;
+using GmcV2.Infrastructure;
 
 namespace GmcV2.Worker;
 
 /// <summary>
-/// In-app notification fan-out per the workflow §12 matrix. In-app only (ops.Notification);
-/// email is a later pass. Never throws — notifications must not break the pipeline.
+/// Fan-out per the workflow §12 matrix: in-app (ops.Notification) always, email when a
+/// transport is configured (GMCV2_SMTP_HOST). Never throws — notifications must not
+/// break the pipeline.
 /// </summary>
 public static class Notifier
 {
+    private static readonly IEmailTransport Email = EmailTransportFactory.FromEnv();
+
+    /// <summary>Role → address map for email fan-out (demo seeds these users). Unknown roles are skipped.</summary>
+    private static readonly Dictionary<string, string> RoleEmails = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["SalesPerson"] = "sales@opexminds.com",
+        ["Underwriter"] = "uw@opexminds.com",
+        ["SeniorUnderwriter"] = "senior@opexminds.com",
+        ["VP"] = "vp@opexminds.com",
+        ["Admin"] = "admin@opexminds.com",
+    };
+
+    private static async Task Safe(IGmcRepository repo, Notification n)
+    {
+        try
+        {
+            await repo.AddNotificationAsync(n);
+            if (Email.IsConfigured && RoleEmails.TryGetValue(n.TargetRole, out var to))
+                await Email.SendAsync(to, $"GMC · {n.Title}", $"{n.Body}\n\n— GMC v2, Opexminds");
+        }
+        catch { /* notification must never break the pipeline */ }
+    }
     public static Task CaseAutoQuoted(IGmcRepository repo, Case c, QuoteVersion q) =>
         Safe(repo, new Notification
         {
@@ -55,10 +79,4 @@ public static class Notifier
             Body = $"V{oldVersion} superseded by V{newVersion}.",
             LinkPath = $"/case/{c.CaseId}",
         });
-
-    private static async Task Safe(IGmcRepository repo, Notification n)
-    {
-        try { await repo.AddNotificationAsync(n); }
-        catch { /* notification must never break the pipeline */ }
-    }
 }
