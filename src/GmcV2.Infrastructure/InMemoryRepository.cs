@@ -476,6 +476,55 @@ public sealed class InMemoryRepository : IGmcRepository
         return Task.CompletedTask;
     }
 
+    // ── SI scenario (prototype v74 step 5) ────────────────────────────────
+
+    private readonly Dictionary<long, List<StdClaim>> _stdClaims = new();
+    private readonly Dictionary<long, SIScenarioRow> _siScenarios = new();
+
+    public Task SaveStdClaimsAsync(long caseId, IReadOnlyList<StdClaim> claims)
+    {
+        lock (_gate) _stdClaims[caseId] = claims.Select(c => new StdClaim
+        {
+            StdClaimId = c.StdClaimId, CaseId = caseId, ClaimNumber = c.ClaimNumber,
+            MemberNumber = c.MemberNumber, ClaimStatus = c.ClaimStatus, PaidAmount = c.PaidAmount,
+            DiagnosisText = c.DiagnosisText, IsLargeClaim = c.IsLargeClaim,
+        }).ToList();
+        return Task.CompletedTask;
+    }
+
+    public Task<List<StdClaim>> GetStdClaimsAsync(long caseId)
+    {
+        lock (_gate) return Task.FromResult(_stdClaims.TryGetValue(caseId, out var l) ? l.Select(c => new StdClaim
+        {
+            StdClaimId = c.StdClaimId, CaseId = c.CaseId, ClaimNumber = c.ClaimNumber,
+            MemberNumber = c.MemberNumber, ClaimStatus = c.ClaimStatus, PaidAmount = c.PaidAmount,
+            DiagnosisText = c.DiagnosisText, IsLargeClaim = c.IsLargeClaim,
+        }).ToList() : new List<StdClaim>());
+    }
+
+    public Task<bool> HasRawRowsAsync(long caseId)
+    {
+        lock (_gate) return Task.FromResult(_documents.Values.Any(d => d.CaseId == caseId));
+    }
+
+    public Task<SIScenarioRow?> GetSIScenarioAsync(long caseId)
+    {
+        lock (_gate) return Task.FromResult(_siScenarios.TryGetValue(caseId, out var s) ? new SIScenarioRow
+        {
+            CaseId = s.CaseId, Factor3To4 = s.Factor3To4, Factor3To5 = s.Factor3To5, Factor4To5 = s.Factor4To5,
+            ApplyToPricing = s.ApplyToPricing, UpdatedBy = s.UpdatedBy,
+        } : null);
+    }
+
+    public Task SaveSIScenarioAsync(SIScenarioRow row)
+    {
+        lock (_gate) _siScenarios[row.CaseId] = row;
+        return Task.CompletedTask;
+    }
+
+    public Task<PricingMasterVersion?> GetActivePricingMasterAsync()
+        => Task.FromResult<PricingMasterVersion?>(null);
+
     public Task<List<RawRow>> AddRawRowsAsync(long documentId, string sheetName, List<string[]> rows)
     {
         lock (_gate)

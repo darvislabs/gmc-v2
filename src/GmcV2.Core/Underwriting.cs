@@ -20,9 +20,12 @@ public sealed class StdMember
 public sealed class StdClaim
 {
     public long StdClaimId { get; set; }
+    public long CaseId { get; set; }
     public string ClaimNumber { get; set; } = "";
     public string MemberNumber { get; set; } = "";
     public string ClaimStatus { get; set; } = "Paid";   // Paid | Outstanding | Closed | Rejected
+    public string? DiagnosisText { get; set; }
+    public bool IsChronic { get; set; }
     public DateTime? AdmissionDate { get; set; }
     public DateTime? DischargeDate { get; set; }
     public decimal ClaimedAmount { get; set; }

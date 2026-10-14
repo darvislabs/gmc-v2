@@ -406,6 +406,15 @@ public static class StageHandlers
             for (var i = 0; i < claims.Count; i++)
                 claims[i].StdClaimId = StandardizedClaims.Key(c.CaseId, i);
             StandardizedClaims.Replace(c.CaseId, claims);
+            // Persist the projection ONLY for demo-data cases. Real cases carry parsed rows in
+            // ing.RawRow (source of truth); a daemon restart wipes the in-memory bridge, and
+            // blindly persisting here would overwrite the real backfill with synthetic rows.
+            var isDemoData = !await repo.HasRawRowsAsync(c.CaseId);
+            if (isDemoData)
+            {
+                try { await repo.SaveStdClaimsAsync(c.CaseId, claims); }
+                catch { /* persistence is additive — SI scenario falls back to in-memory */ }
+            }
             await repo.AddNoteAsync(c.CaseId, "Pipeline",
                 $"Standardized {data.Members.Count} members / {claims.Count} claims (DQ {data.DataQualityScore}).");
 

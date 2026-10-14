@@ -334,7 +334,7 @@ async function viewCase(id) {
     }
   });
   if (shouldRun || runBtn) startPipeline(id, { quiet: !runBtn });
-  if (quote) { renderDecisions(id, quote); wireQuoteOverride(id, quote); }
+  if (quote) { renderDecisions(id, quote); wireQuoteOverride(id, quote); wireSIScenario(id); }
 }
 
 function stageTimeline(stages) {
@@ -366,7 +366,7 @@ async function startPipeline(id, { quiet = false } = {}) {
     const se = $('#stages'); if (se) se.innerHTML = stageTimeline(stages);
     const qs = $('#quote-section');
     const quote = quotes.filter(q => q.status === 'Current').at(-1) || quotes.at(-1);
-    if (qs && quote) { qs.innerHTML = quoteSection(quote); renderDecisions(id, quote); wireQuoteOverride(id, quote); }
+    if (qs && quote) { qs.innerHTML = quoteSection(quote); renderDecisions(id, quote); wireQuoteOverride(id, quote); wireSIScenario(id); }
     // refresh the status badge + case header from the post-run case object
     const badgeEl = $('#view .ox-card .ox-right .ox-badge');
     if (badgeEl && c?.status) { badgeEl.textContent = c.status; badgeEl.className = 'ox-badge ' + badgeClass(c.status); }
@@ -426,7 +426,7 @@ function quoteSection(q) {
       </div>
     </div>` : ''}
   </div>
-  <div class="ox-grid-2" style="margin-top:16px">
+    <div class="ox-grid-2" style="margin-top:16px">
     <div class="ox-card">
       <div class="ox-mono-label">GUARDRAILS</div>
       <div id="guardrails">${q.guardrails ? guardrailPanel(q.guardrails) : '<p class="ox-muted">Not evaluated.</p>'}</div>
@@ -435,7 +435,28 @@ function quoteSection(q) {
       <div class="ox-mono-label">ANALYTICS SNAPSHOT</div>
       ${q.analytics ? analyticsPanel(q.analytics) : '<p class="ox-muted">No snapshot.</p>'}
     </div>
-  </div>`;
+  </div>
+  ${canDecide() ? `
+  <div class="ox-card" style="margin-top:16px">
+    <div class="ox-row ox-row--between ox-row--wrap">
+      <div class="ox-mono-label">SUM-INSURED SCENARIO — CHRONIC SEVERITY REPLAY</div>
+      <button class="ox-btn ox-btn--sm" id="sis-toggle">Scenario…</button>
+    </div>
+    <div id="sis-form" class="ox-hide" style="margin-top:10px">
+      <div id="sis-cards" class="ox-grid-3" style="gap:10px;margin-bottom:10px"><div class="ox-skeleton" style="height:90px"></div></div>
+      <div class="ox-grid-3" style="gap:10px">
+        <label class="ox-field"><span class="ox-mono-label">3L→4L REALIZATION</span><input class="ox-input" id="sis-f34" type="number" min="0" max="5" step="0.1" value="1"></label>
+        <label class="ox-field"><span class="ox-mono-label">3L→5L REALIZATION</span><input class="ox-input" id="sis-f35" type="number" min="0" max="5" step="0.1" value="1"></label>
+        <label class="ox-field"><span class="ox-mono-label">4L→5L REALIZATION</span><input class="ox-input" id="sis-f45" type="number" min="0" max="5" step="0.1" value="1"></label>
+      </div>
+      <label class="ox-row" style="gap:8px;margin-top:10px;align-items:center">
+        <input type="checkbox" id="sis-apply"><span class="ox-muted">Apply to pricing (adds incremental /life to the benefit bridge)</span>
+      </label>
+      <div class="ox-row" style="margin-top:10px;gap:8px">
+        <button class="ox-btn ox-btn--primary ox-btn--sm" id="sis-save">Save scenario</button>
+      </div>
+    </div>
+  </div>` : ''}`;
 }
 
 function fmtComp(c) {
@@ -462,6 +483,42 @@ function wireQuoteOverride(caseId, quote) {
       alert(`Quote V${res.versionNo} created — ${inr(res.technicalPremium)} technical premium.`);
       route();
     } catch (ex) { alert('Override failed: ' + ex.message); }
+  });
+}
+
+// SI-scenario (prototype v74 step 5): chronic severity replay across SI bands
+function wireSIScenario(caseId) {
+  const t = $('#sis-toggle'); if (!t) return;
+  t.addEventListener('click', async () => {
+    const form = $('#sis-form');
+    const opening = form.classList.contains('ox-hide');
+    form.classList.toggle('ox-hide');
+    if (!opening || $('#sis-cards').dataset.loaded) return;
+    try {
+      const d = await api(`/api/v1/cases/${caseId}/si-scenario`);
+      if (!d.computed) { $('#sis-cards').innerHTML = `<div class="ox-banner ox-banner--warn">${esc(d.message || 'Run the pipeline first.')}</div>`; $('#sis-cards').dataset.loaded = '1'; return; }
+      $('#sis-f34').value = d.factors.f34; $('#sis-f35').value = d.factors.f35; $('#sis-f45').value = d.factors.f45;
+      $('#sis-apply').checked = !!d.applyToPricing;
+      $('#sis-cards').innerHTML = (d.bands || []).map(b => `
+        <div class="ox-kpi ${b.incrementalCost > 0 ? 'ox-kpi--warn' : ''}">
+          <div class="ox-mono-label">${esc(b.label)}</div>
+          <div class="ox-money">${inr(b.incrementalCost)}</div>
+          <div class="ox-kpi-sub">historical ${inr(b.historicalCost)} · ${b.claimCount} chronic claims · ${(b.realizationFactor * 100).toFixed(0)}%</div>
+        </div>`).join('');
+      $('#sis-cards').dataset.loaded = '1';
+    } catch (ex) { $('#sis-cards').innerHTML = `<div class="ox-banner ox-banner--error">${esc(ex.message)}</div>`; }
+  });
+  $('#sis-save').addEventListener('click', async () => {
+    try {
+      const res = await post(`/api/v1/cases/${caseId}/si-scenario`, {
+        factor3To4: Number($('#sis-f34').value || 1),
+        factor3To5: Number($('#sis-f35').value || 1),
+        factor4To5: Number($('#sis-f45').value || 1),
+        applyToPricing: $('#sis-apply').checked,
+      });
+      alert(res.note || 'Scenario saved.');
+      if (res.applyToPricing) route();
+    } catch (ex) { alert('Save failed: ' + ex.message); }
   });
 }
 

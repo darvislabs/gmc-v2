@@ -764,6 +764,129 @@ public sealed partial class SqlRepository : IGmcRepository
         await cmd.ExecuteNonQueryAsync();
     }
 
+    // ── SI scenario (prototype v74 step 5) ────────────────────────────────
+
+    public async Task<List<StdClaim>> GetStdClaimsAsync(long caseId)
+    {
+        await using var conn = await OpenAsync();
+        using var cmd = Cmd(conn, """
+            SELECT s.StdClaimId, s.CaseId, s.ClaimNumber, s.MemberNumber, s.ClaimStatus, s.PaidAmount,
+                   s.DiseaseCategory, s.DiagnosisText, s.IsLargeClaim,
+                   CAST(COALESCE(m.HasChronic, 0) AS BIT) AS IsChronic
+              FROM ing.StdClaim s
+              LEFT JOIN ing.StdMember m ON m.CaseId = s.CaseId AND m.MemberNumber = s.MemberNumber
+             WHERE s.CaseId = @case ORDER BY s.StdClaimId
+            """);
+        cmd.Parameters.AddWithValue("@case", caseId);
+        using var r = await cmd.ExecuteReaderAsync();
+        var list = new List<StdClaim>();
+        while (await r.ReadAsync())
+            list.Add(new StdClaim
+            {
+                StdClaimId = L(r["StdClaimId"]),
+                CaseId = L(r["CaseId"]),
+                ClaimNumber = S(r["ClaimNumber"]),
+                MemberNumber = S(r["MemberNumber"]),
+                ClaimStatus = S(r["ClaimStatus"]),
+                PaidAmount = D(r["PaidAmount"]),
+                DiseaseCategory = S(r["DiagnosisText"]) is { Length: > 0 } d ? d : null,
+                DiagnosisText = S(r["DiagnosisText"]) is { Length: > 0 } dt ? dt : null,
+                IsLargeClaim = B(r["IsLargeClaim"]),
+                IsChronic = B(r["IsChronic"]),
+            });
+        return list;
+    }
+
+    public async Task SaveStdClaimsAsync(long caseId, IReadOnlyList<StdClaim> claims)
+    {
+        await using var conn = await OpenAsync();
+        await using var tx = (SqlTransaction)await conn.BeginTransactionAsync();
+        using (var del = Cmd(conn, "DELETE FROM ing.StdClaim WHERE CaseId = @case"))
+        { del.Transaction = tx; del.Parameters.AddWithValue("@case", caseId); await del.ExecuteNonQueryAsync(); }
+        foreach (var cl in claims)
+        {
+            using var cmd = Cmd(conn, """
+                INSERT ing.StdClaim (CaseId, ClaimNumber, MemberNumber, ClaimStatus, PaidAmount,
+                                     DiseaseCategory, DiagnosisText, IsLargeClaim)
+                VALUES (@case, @cn, @mn, @st, @paid, @dc, @dx, @large)
+                """);
+            cmd.Transaction = tx;
+            cmd.Parameters.AddWithValue("@case", caseId);
+            cmd.Parameters.AddWithValue("@cn", cl.ClaimNumber);
+            cmd.Parameters.AddWithValue("@mn", cl.MemberNumber ?? "");
+            cmd.Parameters.AddWithValue("@st", cl.ClaimStatus);
+            cmd.Parameters.AddWithValue("@paid", cl.PaidAmount);
+            cmd.Parameters.AddWithValue("@dc", (object?)cl.DiseaseCategory ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@dx", (object?)cl.DiagnosisText ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@large", cl.IsLargeClaim);
+            await cmd.ExecuteNonQueryAsync();
+        }
+        await tx.CommitAsync();
+    }
+
+    public async Task<bool> HasRawRowsAsync(long caseId)
+    {
+        await using var conn = await OpenAsync();
+        using var cmd = Cmd(conn, """
+            SELECT CASE WHEN EXISTS (
+                SELECT 1 FROM ing.RawRow rr
+                JOIN core.CaseDocument d ON d.DocumentId = rr.DocumentId
+                 WHERE d.CaseId = @case) THEN 1 ELSE 0 END
+            """);
+        cmd.Parameters.AddWithValue("@case", caseId);
+        var r = await cmd.ExecuteScalarAsync();
+        return Convert.ToInt32(r) == 1;
+    }
+
+    public async Task<SIScenarioRow?> GetSIScenarioAsync(long caseId)
+    {
+        await using var conn = await OpenAsync();
+        using var cmd = Cmd(conn, "SELECT CaseId, Factor3To4, Factor3To5, Factor4To5, ApplyToPricing, Inc3To4, Inc3To5, Inc4To5, IncrementalPerLife, UpdatedBy, UpdatedAtUtc FROM uw.SIScenario WHERE CaseId = @case");
+        cmd.Parameters.AddWithValue("@case", caseId);
+        using var r = await cmd.ExecuteReaderAsync();
+        if (!await r.ReadAsync()) return null;
+        return new SIScenarioRow
+        {
+            CaseId = L(r["CaseId"]),
+            Factor3To4 = D(r["Factor3To4"]),
+            Factor3To5 = D(r["Factor3To5"]),
+            Factor4To5 = D(r["Factor4To5"]),
+            ApplyToPricing = B(r["ApplyToPricing"]),
+            Inc3To4 = D(r["Inc3To4"]),
+            Inc3To5 = D(r["Inc3To5"]),
+            Inc4To5 = D(r["Inc4To5"]),
+            IncrementalPerLife = D(r["IncrementalPerLife"]),
+            UpdatedBy = S(r["UpdatedBy"]) is { Length: > 0 } u ? u : null,
+            UpdatedAtUtc = T(r["UpdatedAtUtc"]),
+        };
+    }
+
+    public async Task SaveSIScenarioAsync(SIScenarioRow row)
+    {
+        await using var conn = await OpenAsync();
+        using var cmd = Cmd(conn, """
+            MERGE uw.SIScenario AS t
+            USING (SELECT @case AS CaseId) AS s ON t.CaseId = s.CaseId
+            WHEN MATCHED THEN UPDATE SET Factor3To4=@f34, Factor3To5=@f35, Factor4To5=@f45,
+                ApplyToPricing=@apply, UpdatedBy=@by, UpdatedAtUtc=SYSUTCDATETIME()
+            WHEN NOT MATCHED THEN INSERT (CaseId, Factor3To4, Factor3To5, Factor4To5, ApplyToPricing, UpdatedBy)
+                VALUES (@case, @f34, @f35, @f45, @apply, @by);
+            """);
+        cmd.Parameters.AddWithValue("@case", row.CaseId);
+        cmd.Parameters.AddWithValue("@f34", row.Factor3To4);
+        cmd.Parameters.AddWithValue("@f35", row.Factor3To5);
+        cmd.Parameters.AddWithValue("@f45", row.Factor4To5);
+        cmd.Parameters.AddWithValue("@apply", row.ApplyToPricing);
+        cmd.Parameters.AddWithValue("@by", (object?)row.UpdatedBy ?? DBNull.Value);
+        await cmd.ExecuteNonQueryAsync();
+    }
+
+    public async Task<PricingMasterVersion?> GetActivePricingMasterAsync()
+    {
+        var m = await GetActiveMasterVersionAsync();
+        return m;
+    }
+
     public async Task<List<RawRow>> GetRawRowsAsync(long documentId)
     {
         await using var conn = await OpenAsync();

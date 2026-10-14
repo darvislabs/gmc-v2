@@ -48,6 +48,14 @@ public interface IGmcRepository
     // Ingestion
     Task<List<RawRow>> AddRawRowsAsync(long documentId, string sheetName, List<string[]> rows);
     Task DeleteRawRowsAsync(long documentId, string sheetName);
+
+    // SI scenario (prototype v74 step 5)
+    Task<List<StdClaim>> GetStdClaimsAsync(long caseId);
+    Task SaveStdClaimsAsync(long caseId, IReadOnlyList<StdClaim> claims);
+    Task<bool> HasRawRowsAsync(long caseId);
+    Task<SIScenarioRow?> GetSIScenarioAsync(long caseId);
+    Task SaveSIScenarioAsync(SIScenarioRow row);
+    Task<PricingMasterVersion?> GetActivePricingMasterAsync();
     Task<List<RawRow>> GetRawRowsAsync(long documentId);
     Task<SourceColumn> AddOrUpdateSourceColumnAsync(SourceColumn col);
     Task<List<SourceColumn>> GetSourceColumnsAsync(long documentId);
