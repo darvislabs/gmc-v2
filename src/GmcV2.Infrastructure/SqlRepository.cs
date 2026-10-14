@@ -887,6 +887,110 @@ public sealed partial class SqlRepository : IGmcRepository
         return m;
     }
 
+    // ── commercial discount loop (prototype v74 step 8) ───────────────────
+
+    public async Task<DiscountRequestRow> SaveDiscountRequestAsync(DiscountRequestRow row)
+    {
+        await using var conn = await OpenAsync();
+        if (row.DiscountRequestId == 0)
+        {
+            using var cmd = Cmd(conn, """
+                INSERT uw.DiscountRequest (CaseId, QuoteVersionId, RequestedByUserId, RequestedPct,
+                     RequestedRemarks, JustificationType, CompetitorQuoteId, Status, RequestedAtUtc)
+                OUTPUT INSERTED.DiscountRequestId
+                VALUES (@case, @qv, @by, @pct, @rem, @jt, @cq, @st, SYSUTCDATETIME())
+                """);
+            cmd.Parameters.AddWithValue("@case", row.CaseId);
+            cmd.Parameters.AddWithValue("@qv", row.QuoteVersionId);
+            cmd.Parameters.AddWithValue("@by", row.RequestedByUserId);
+            cmd.Parameters.AddWithValue("@pct", row.RequestedPct);
+            cmd.Parameters.AddWithValue("@rem", (object?)row.RequestedRemarks ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@jt", (object?)row.JustificationType ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@cq", (object?)row.CompetitorQuoteId ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@st", row.Status);
+            row.DiscountRequestId = L(await cmd.ExecuteScalarAsync());
+        }
+        else
+        {
+            using var cmd = Cmd(conn, """
+                UPDATE uw.DiscountRequest SET Status=@st, ApprovedPct=@ap, ApprovedByUserId=@aby,
+                     ApprovalRemarks=@arem, ResultingQuoteVersionId=@rqv, DecidedAtUtc=SYSUTCDATETIME()
+                WHERE DiscountRequestId=@id
+                """);
+            cmd.Parameters.AddWithValue("@id", row.DiscountRequestId);
+            cmd.Parameters.AddWithValue("@st", row.Status);
+            cmd.Parameters.AddWithValue("@ap", (object?)row.ApprovedPct ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@aby", (object?)row.ApprovedByUserId ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@arem", (object?)row.ApprovalRemarks ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@rqv", (object?)row.ResultingQuoteVersionId ?? DBNull.Value);
+            await cmd.ExecuteNonQueryAsync();
+        }
+        return row;
+    }
+
+    public async Task<List<DiscountRequestRow>> GetDiscountRequestsAsync(long caseId)
+    {
+        await using var conn = await OpenAsync();
+        using var cmd = Cmd(conn, """
+            SELECT d.DiscountRequestId, d.CaseId, d.QuoteVersionId, d.RequestedByUserId, d.RequestedPct,
+                   d.RequestedRemarks, d.JustificationType, d.CompetitorQuoteId, d.Status, d.ApprovedPct,
+                   d.ApprovedByUserId, d.ApprovalRemarks, d.ResultingQuoteVersionId, d.RequestedAtUtc, d.DecidedAtUtc,
+                   ru.Email AS RequestedByEmail, au.Email AS ApprovedByEmail
+              FROM uw.DiscountRequest d
+              LEFT JOIN ref.[User] ru ON ru.UserId = d.RequestedByUserId
+              LEFT JOIN ref.[User] au ON au.UserId = d.ApprovedByUserId
+             WHERE d.CaseId = @case ORDER BY d.DiscountRequestId
+            """);
+        cmd.Parameters.AddWithValue("@case", caseId);
+        using var r = await cmd.ExecuteReaderAsync();
+        return await ReadDiscountRequestsAsync(r);
+    }
+
+    public async Task<DiscountRequestRow?> GetDiscountRequestAsync(long id)
+    {
+        await using var conn = await OpenAsync();
+        using var cmd = Cmd(conn, """
+            SELECT d.DiscountRequestId, d.CaseId, d.QuoteVersionId, d.RequestedByUserId, d.RequestedPct,
+                   d.RequestedRemarks, d.JustificationType, d.CompetitorQuoteId, d.Status, d.ApprovedPct,
+                   d.ApprovedByUserId, d.ApprovalRemarks, d.ResultingQuoteVersionId, d.RequestedAtUtc, d.DecidedAtUtc,
+                   ru.Email AS RequestedByEmail, au.Email AS ApprovedByEmail
+              FROM uw.DiscountRequest d
+              LEFT JOIN ref.[User] ru ON ru.UserId = d.RequestedByUserId
+              LEFT JOIN ref.[User] au ON au.UserId = d.ApprovedByUserId
+             WHERE d.DiscountRequestId = @id
+            """);
+        cmd.Parameters.AddWithValue("@id", id);
+        using var r = await cmd.ExecuteReaderAsync();
+        return (await ReadDiscountRequestsAsync(r)).FirstOrDefault();
+    }
+
+    private static async Task<List<DiscountRequestRow>> ReadDiscountRequestsAsync(SqlDataReader r)
+    {
+        var list = new List<DiscountRequestRow>();
+        while (await r.ReadAsync())
+            list.Add(new DiscountRequestRow
+            {
+                DiscountRequestId = L(r["DiscountRequestId"]),
+                CaseId = L(r["CaseId"]),
+                QuoteVersionId = L(r["QuoteVersionId"]),
+                RequestedByUserId = (int)I(r["RequestedByUserId"]),
+                RequestedByEmail = S(r["RequestedByEmail"]) ?? "",
+                RequestedPct = D(r["RequestedPct"]),
+                RequestedRemarks = S(r["RequestedRemarks"]) is { Length: > 0 } rm ? rm : null,
+                JustificationType = S(r["JustificationType"]) is { Length: > 0 } jt ? jt : null,
+                CompetitorQuoteId = r["CompetitorQuoteId"] is DBNull ? null : L(r["CompetitorQuoteId"]),
+                Status = S(r["Status"]),
+                ApprovedPct = r["ApprovedPct"] is DBNull ? null : D(r["ApprovedPct"]),
+                ApprovedByUserId = r["ApprovedByUserId"] is DBNull ? null : (int)I(r["ApprovedByUserId"]),
+                ApprovedByEmail = S(r["ApprovedByEmail"]) is { Length: > 0 } ae ? ae : null,
+                ApprovalRemarks = S(r["ApprovalRemarks"]) is { Length: > 0 } ar ? ar : null,
+                ResultingQuoteVersionId = r["ResultingQuoteVersionId"] is DBNull ? null : L(r["ResultingQuoteVersionId"]),
+                RequestedAtUtc = T(r["RequestedAtUtc"]),
+                DecidedAtUtc = r["DecidedAtUtc"] is DBNull ? null : T(r["DecidedAtUtc"]),
+            });
+        return list;
+    }
+
     public async Task<List<RawRow>> GetRawRowsAsync(long documentId)
     {
         await using var conn = await OpenAsync();

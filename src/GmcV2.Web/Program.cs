@@ -37,6 +37,7 @@ public static class Program
         QuoteOverrideApi.Map(app);
         SIScenarioApi.Map(app);
         ApiMapping.MapAll(app);
+        DiscountApi.Map(app);
         Pages.MapAll(app);
 
         app.UseStaticFiles(new StaticFileOptions

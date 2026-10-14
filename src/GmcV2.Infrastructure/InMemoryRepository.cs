@@ -525,6 +525,50 @@ public sealed class InMemoryRepository : IGmcRepository
     public Task<PricingMasterVersion?> GetActivePricingMasterAsync()
         => Task.FromResult<PricingMasterVersion?>(null);
 
+    // ── commercial discount loop (prototype v74 step 8) ───────────────────
+
+    private readonly List<DiscountRequestRow> _discounts = new();
+    private long _discountSeq;
+
+    public Task<DiscountRequestRow> SaveDiscountRequestAsync(DiscountRequestRow row)
+    {
+        lock (_gate)
+        {
+            if (row.DiscountRequestId == 0)
+            {
+                row.DiscountRequestId = ++_discountSeq;
+                _discounts.Add(row);
+            }
+            else
+            {
+                var i = _discounts.FindIndex(d => d.DiscountRequestId == row.DiscountRequestId);
+                if (i >= 0) _discounts[i] = row;
+            }
+        }
+        return Task.FromResult(row);
+    }
+
+    public Task<List<DiscountRequestRow>> GetDiscountRequestsAsync(long caseId)
+    {
+        lock (_gate) return Task.FromResult(_discounts.Where(d => d.CaseId == caseId).Select(Clone).ToList());
+    }
+
+    public Task<DiscountRequestRow?> GetDiscountRequestAsync(long id)
+    {
+        lock (_gate) return Task.FromResult(_discounts.Where(d => d.DiscountRequestId == id).Select(Clone).FirstOrDefault());
+    }
+
+    private static DiscountRequestRow Clone(DiscountRequestRow d) => new()
+    {
+        DiscountRequestId = d.DiscountRequestId, CaseId = d.CaseId, QuoteVersionId = d.QuoteVersionId,
+        RequestedByUserId = d.RequestedByUserId, RequestedPct = d.RequestedPct,
+        RequestedRemarks = d.RequestedRemarks, JustificationType = d.JustificationType,
+        CompetitorQuoteId = d.CompetitorQuoteId, Status = d.Status, ApprovedPct = d.ApprovedPct,
+        ApprovedByUserId = d.ApprovedByUserId, ApprovalRemarks = d.ApprovalRemarks,
+        ResultingQuoteVersionId = d.ResultingQuoteVersionId,
+        RequestedAtUtc = d.RequestedAtUtc, DecidedAtUtc = d.DecidedAtUtc,
+    };
+
     public Task<List<RawRow>> AddRawRowsAsync(long documentId, string sheetName, List<string[]> rows)
     {
         lock (_gate)

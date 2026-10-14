@@ -56,6 +56,11 @@ public interface IGmcRepository
     Task<SIScenarioRow?> GetSIScenarioAsync(long caseId);
     Task SaveSIScenarioAsync(SIScenarioRow row);
     Task<PricingMasterVersion?> GetActivePricingMasterAsync();
+
+    // Commercial discount loop (prototype v74 step 8)
+    Task<DiscountRequestRow> SaveDiscountRequestAsync(DiscountRequestRow row);
+    Task<List<DiscountRequestRow>> GetDiscountRequestsAsync(long caseId);
+    Task<DiscountRequestRow?> GetDiscountRequestAsync(long id);
     Task<List<RawRow>> GetRawRowsAsync(long documentId);
     Task<SourceColumn> AddOrUpdateSourceColumnAsync(SourceColumn col);
     Task<List<SourceColumn>> GetSourceColumnsAsync(long documentId);

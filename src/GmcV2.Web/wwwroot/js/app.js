@@ -334,7 +334,7 @@ async function viewCase(id) {
     }
   });
   if (shouldRun || runBtn) startPipeline(id, { quiet: !runBtn });
-  if (quote) { renderDecisions(id, quote); wireQuoteOverride(id, quote); wireSIScenario(id); }
+  if (quote) { renderDecisions(id, quote); wireQuoteOverride(id, quote); wireSIScenario(id); wireDiscountLoop(id); }
 }
 
 function stageTimeline(stages) {
@@ -366,7 +366,7 @@ async function startPipeline(id, { quiet = false } = {}) {
     const se = $('#stages'); if (se) se.innerHTML = stageTimeline(stages);
     const qs = $('#quote-section');
     const quote = quotes.filter(q => q.status === 'Current').at(-1) || quotes.at(-1);
-    if (qs && quote) { qs.innerHTML = quoteSection(quote); renderDecisions(id, quote); wireQuoteOverride(id, quote); wireSIScenario(id); }
+    if (qs && quote) { qs.innerHTML = quoteSection(quote); renderDecisions(id, quote); wireQuoteOverride(id, quote); wireSIScenario(id); wireDiscountLoop(id); }
     // refresh the status badge + case header from the post-run case object
     const badgeEl = $('#view .ox-card .ox-right .ox-badge');
     if (badgeEl && c?.status) { badgeEl.textContent = c.status; badgeEl.className = 'ox-badge ' + badgeClass(c.status); }
@@ -425,6 +425,27 @@ function quoteSection(q) {
         <button class="ox-btn ox-btn--sm" id="qov-cancel">Cancel</button>
       </div>
     </div>` : ''}
+    <div class="ox-hr"></div>
+    <div class="ox-row ox-row--between ox-row--wrap">
+      <div class="ox-mono-label">COMMERCIAL DISCOUNT — SALES ↔ UW LOOP</div>
+      <button class="ox-btn ox-btn--sm" id="disc-toggle">Request discount…</button>
+    </div>
+    <div id="disc-form" class="ox-hide" style="margin-top:10px">
+      <div class="ox-grid-2" style="gap:10px">
+        <label class="ox-field"><span class="ox-mono-label">REQUESTED %</span><input class="ox-input" id="disc-pct" type="number" min="0" max="50" step="0.5" placeholder="0"></label>
+        <label class="ox-field"><span class="ox-mono-label">JUSTIFICATION</span>
+          <select class="ox-input" id="disc-just">
+            <option>CommercialDiscount</option><option>LowClaimRatioDiscount</option>
+            <option>Retention</option><option>CompetitorMatch</option>
+          </select></label>
+      </div>
+      <label class="ox-field" style="margin-top:10px"><span class="ox-mono-label">REMARKS</span><input class="ox-input" id="disc-remarks" placeholder="e.g. competitor quote 8% lower, renewal at risk"></label>
+      <div class="ox-row" style="margin-top:10px;gap:8px">
+        <button class="ox-btn ox-btn--primary ox-btn--sm" id="disc-submit">Submit request</button>
+        <button class="ox-btn ox-btn--sm" id="disc-cancel">Cancel</button>
+      </div>
+    </div>
+    <div id="disc-list" style="margin-top:12px"></div>
   </div>
     <div class="ox-grid-2" style="margin-top:16px">
     <div class="ox-card">
@@ -484,6 +505,67 @@ function wireQuoteOverride(caseId, quote) {
       route();
     } catch (ex) { alert('Override failed: ' + ex.message); }
   });
+}
+
+// Commercial discount loop (prototype v74 step 8): Sales requests → UW chain decides per authority matrix
+async function renderDiscounts(caseId) {
+  const list = $('#disc-list'); if (!list) return;
+  try {
+    const rows = await api(`/api/v1/cases/${caseId}/discounts`);
+    list.innerHTML = rows.length === 0 ? '' : `
+      <div class="ox-mono-label" style="margin-bottom:6px">REQUEST HISTORY</div>` + rows.map(r => `
+      <div class="ox-card" style="padding:10px;margin-bottom:8px">
+        <div class="ox-row ox-row--between ox-row--wrap" style="gap:8px">
+          <div><strong>${r.requestedPct}%</strong> on V-quote · <span class="ox-muted">${esc(r.requestedByEmail)} · ${new Date(r.requestedAtUtc).toLocaleString()}</span></div>
+          <div class="ox-badge ${r.status === 'Approved' ? 'ox-badge--ok' : r.status === 'Declined' ? 'ox-badge--error' : 'ox-badge--warn'}">${esc(r.status)}</div>
+        </div>
+        ${r.approvedPct != null ? `<div class="ox-muted" style="margin-top:4px">Approved at ${r.approvedPct}% by ${esc(r.approvedByEmail || '')}</div>` : ''}
+        ${r.approvalRemarks ? `<div class="ox-muted" style="margin-top:2px">“${esc(r.approvalRemarks)}”</div>` : ''}
+        ${r.status === 'Requested' && canDecide() ? `
+        <div class="ox-row" style="margin-top:8px;gap:8px">
+          <input class="ox-input" style="max-width:110px" id="disc-appr-${r.discountRequestId}" type="number" min="0" max="${r.requestedPct}" step="0.5" value="${r.requestedPct}">
+          <button class="ox-btn ox-btn--primary ox-btn--sm" data-approve="${r.discountRequestId}">Approve</button>
+          <button class="ox-btn ox-btn--sm" data-decline="${r.discountRequestId}">Decline</button>
+        </div>` : ''}
+      </div>`).join('');
+    list.querySelectorAll('[data-approve]').forEach(b => b.addEventListener('click', async () => {
+      const did = b.dataset.approve;
+      const pct = Number($(`#disc-appr-${did}`).value || 0);
+      try {
+        const res = await post(`/api/v1/discounts/${did}/decide`, { approvedPct: pct, remarks: `approved via workbench at ${pct}%` });
+        if (res.error) throw new Error(res.error);
+        renderDiscounts(caseId);
+      } catch (ex) { alert('Decision failed: ' + ex.message); }
+    }));
+    list.querySelectorAll('[data-decline]').forEach(b => b.addEventListener('click', async () => {
+      const did = b.dataset.decline;
+      try {
+        const res = await post(`/api/v1/discounts/${did}/decide`, { approvedPct: 0, remarks: 'declined via workbench' });
+        if (res.error) throw new Error(res.error);
+        renderDiscounts(caseId);
+      } catch (ex) { alert('Decision failed: ' + ex.message); }
+    }));
+  } catch { list.innerHTML = ''; }
+}
+
+function wireDiscountLoop(caseId) {
+  const t = $('#disc-toggle'); if (!t) return;
+  t.addEventListener('click', () => $('#disc-form').classList.toggle('ox-hide'));
+  $('#disc-cancel').addEventListener('click', () => $('#disc-form').classList.add('ox-hide'));
+  $('#disc-submit').addEventListener('click', async () => {
+    const pct = Number($('#disc-pct').value || 0);
+    if (pct <= 0) { alert('Enter a requested % (0–50).'); return; }
+    try {
+      const res = await post(`/api/v1/cases/${caseId}/discounts`, {
+        requestedPct: pct, justificationType: $('#disc-just').value, remarks: $('#disc-remarks').value.trim() || null,
+      });
+      if (res.error) throw new Error(res.error);
+      $('#disc-form').classList.add('ox-hide');
+      $('#disc-pct').value = ''; $('#disc-remarks').value = '';
+      renderDiscounts(caseId);
+    } catch (ex) { alert('Request failed: ' + ex.message); }
+  });
+  renderDiscounts(caseId);
 }
 
 // SI-scenario (prototype v74 step 5): chronic severity replay across SI bands
