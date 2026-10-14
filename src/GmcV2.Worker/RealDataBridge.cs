@@ -22,7 +22,12 @@ public static class RealDataBridge
         foreach (var doc in c.Documents)
         {
             var rows = repo.GetRawRowsAsync(doc.DocumentId).GetAwaiter().GetResult();
-            if (rows.Count == 0) continue;
+            if (rows.Count == 0)
+            {
+                Console.Error.WriteLine($"[RealDataBridge] case {caseId} doc {doc.DocType} ({doc.FileName}): 0 raw rows — skipped");
+                continue;
+            }
+            Console.Error.WriteLine($"[RealDataBridge] case {caseId} doc {doc.DocType} ({doc.FileName}): {rows.Count} raw rows");
 
             switch (doc.DocType)
             {
@@ -33,7 +38,12 @@ public static class RealDataBridge
             }
         }
 
-        if (members.Count == 0 && claims.Count == 0) return false;
+        if (members.Count == 0 && claims.Count == 0)
+        {
+            Console.Error.WriteLine($"[RealDataBridge] case {caseId}: no usable member/claim rows → demo fallback");
+            return false;
+        }
+        Console.Error.WriteLine($"[RealDataBridge] case {caseId}: registered {members.Count} members / {claims.Count} claims (expiring {expiring.Count}, proposed {proposed.Count})");
 
         var data = new StageHandlers.DemoData();
         FillMembersTyped(members, data);

@@ -47,6 +47,7 @@ function sevBadge(sev) {
 function renderNav() {
   const items = [
     { hash: '#/', label: 'Cases', show: true },
+    { hash: '#/coding', label: 'Coding', show: canDecide() },
     { hash: '#/exceptions', label: 'Exceptions', show: true },
     { hash: '#/users', label: 'Users', show: isAdmin() },
     { hash: '#/admin', label: 'Admin', show: isAdmin() },
@@ -91,6 +92,7 @@ const routes = {
   '#/admin': viewAdmin,
   '#/about': viewAbout,
   '#/case': viewCase,
+  '#/coding': viewCoding,
 };
 async function route() {
   const hash = location.hash || '#/';
@@ -246,6 +248,8 @@ async function viewCase(id) {
   const missing = required.filter(dt => !have.has(dt));
   const runParam = new URLSearchParams(location.hash.split('?')[1] || '');
   const shouldRun = runParam.get('run') === '1' && (c.status === 'Draft' || c.status === 'AwaitingDocuments');
+  // exception CTA: the case object carries open exceptions — first clinical one wins
+  const openClinical = (c.exceptions || []).find(e => e.status !== 'Resolved' && isClinical(e.code))?.code;
 
   $('#view').innerHTML = `
     <a class="ox-muted" href="#/" style="font-size:13px">← All cases</a>
@@ -285,7 +289,12 @@ async function viewCase(id) {
       </div>
     </div>
     <div id="quote-section">${quote ? quoteSection(quote) : (c.status === 'AutoQuoted' ? '<div class="ox-skeleton" style="height:120px;margin-top:16px"></div>' : '')}</div>
-    <div id="decide-section"></div>`;
+    <div id="decide-section"></div>
+    ${c.status === 'ExceptionPending' && openClinical ? `
+      <div class="ox-banner ox-banner--warn" style="margin-top:16px">
+        <strong>${openClinical === 'EXC-CLIN-UNMAPPED' ? 'Unmapped claim rows' : 'Coding review band'} block this case</strong> — resolve them in the coding workbench.
+      </div>
+      <a class="ox-btn ox-btn--primary" style="margin-top:8px" href="#/coding?case=${id}">Open coding workbench →</a>` : ''}`;
 
   const runBtn = $('#run-pipeline');
   if (runBtn) runBtn.addEventListener('click', () => startPipeline(id));
@@ -466,6 +475,137 @@ function renderDecisions(caseId, quote) {
   }));
 }
 
+// ── view: coding workbench (clinical review queue, workflow Stage 6) ───────
+let CODING_CASES = []; // caseId → label map for the workbench selector
+async function viewCoding() {
+  if (!canDecide()) { $('#view').innerHTML = '<div class="ox-banner ox-banner--error">Underwriters only.</div>'; return; }
+  $('#pagetitle').textContent = 'Coding Workbench';
+  $('#view').innerHTML = '<div class="ox-skeleton" style="height:200px"></div>';
+  const cases = await api('/api/v1/cases');
+  CODING_CASES = cases;
+  // ?case=N deep-link (exception CTAs) → auto-select; otherwise the case with open review work
+  const wantCase = new URLSearchParams(location.hash.split('?')[1] || '').get('case');
+  const candidates = cases.filter(c => ['ExceptionPending', 'ReferredToUW', 'Processing', 'AutoQuoted', 'Approved', 'ApprovedWithChanges', 'UnderReview'].includes(c.status));
+  const sel = wantCase ?? (candidates[0]?.caseId ?? cases[0]?.caseId);
+  if (!sel) { $('#view').innerHTML = '<div class="ox-empty-state"><p class="ox-mb-0">No cases yet — run a pipeline first.</p></div>'; return; }
+  $('#view').innerHTML = `
+    <div class="ox-row ox-row--between ox-row--wrap" style="margin-bottom:12px;gap:8px">
+      <select class="ox-select" id="cw-case" style="max-width:420px">${cases.map(c =>
+        `<option value="${c.caseId}" ${String(c.caseId) === String(sel) ? 'selected' : ''}>${esc(c.caseNumber)} — ${esc(c.clientName)} (${esc(c.status)})</option>`).join('')}</select>
+      <div class="ox-seg" id="cw-filters">
+        ${['All', 'Unmapped', 'InReview', 'HumanAccepted'].map((f, i) =>
+          `<button class="ox-seg-btn${i === 0 ? ' is-active' : ''}" data-f="${f}">${f === 'InReview' ? 'Review band' : f === 'HumanAccepted' ? 'Human-settled' : f}</button>`).join('')}
+      </div>
+    </div>
+    <div id="cw-panel"></div>
+    <div class="ox-drawer-backdrop ox-hide" id="drawer-backdrop"></div>
+    <aside class="ox-drawer ox-hide" id="drawer"></aside>`;
+  $('#cw-case').addEventListener('change', () => location.hash = `#/coding?case=${$('#cw-case').value}`);
+  $('#cw-filters').querySelectorAll('[data-f]').forEach(b => b.addEventListener('click', () => {
+    $('#cw-filters').querySelectorAll('[data-f]').forEach(x => x.classList.toggle('is-active', x === b));
+    renderCodingPanel(sel, b.dataset.f);
+  }));
+  await renderCodingPanel(sel, 'All');
+}
+
+let CODING_ROWS = [];
+async function renderCodingPanel(caseId, filter) {
+  const panel = $('#cw-panel');
+  panel.innerHTML = '<div class="ox-skeleton" style="height:120px"></div>';
+  const data = await api(`/api/v1/cases/${caseId}/coding`);
+  CODING_ROWS = data.rows;
+  const kpis = [
+    ['TOTAL CODED', data.counts.total, ''],
+    ['UNMAPPED', data.counts.unmapped, data.counts.unmapped > 0 ? 'ox-kpi--danger' : 'ox-kpi--ok'],
+    ['REVIEW BAND', data.counts.inReview, data.counts.inReview > 0 ? 'ox-kpi--warn' : ''],
+    ['HUMAN-SETTLED', data.counts.humanSettled, 'ox-kpi--electric'],
+  ];
+  const rows = CODING_ROWS.filter(r => filter === 'All' ? true
+    : filter === 'HumanAccepted' ? (r.codingStatus === 'HumanAccepted' || r.codingStatus === 'HumanCorrected')
+    : r.codingStatus === filter);
+  const actionable = (r) => r.codingStatus === 'Unmapped' || r.codingStatus === 'InReview';
+  const settled = (r) => r.codingStatus === 'HumanAccepted' || r.codingStatus === 'HumanCorrected';
+  panel.innerHTML = `
+    <div class="ox-kpi-row" style="margin-bottom:14px">
+      ${kpis.map(([label, val, cls]) => `<div class="ox-kpi ${cls}"><div class="ox-mono-label">${label}</div><div class="ox-kpi-num">${val}</div></div>`).join('')}
+    </div>
+    ${data.exceptions && (data.exceptions.unmapped || data.exceptions.review) ? `
+      <div class="ox-banner ox-banner--warn" style="margin-bottom:12px">
+        <strong>Clinical exceptions open</strong> — ${data.exceptions.unmapped ? `${esc(String(data.exceptions.unmapped))} unmapped rows block the pipeline` : ''}
+        ${data.exceptions.unmapped && data.exceptions.review ? ' · ' : ''}${data.exceptions.review ? `${esc(String(data.exceptions.review))} in the review band` : ''}.
+        Resolve every row below to release the case.
+      </div>` : ''}
+    ${rows.length === 0 ? '<div class="ox-empty-state"><p class="ox-mb-0">Nothing in this bucket. The queue is clean.</p></div>' : `
+    <div class="ox-table-wrap"><table class="ox-table ox-case-table">
+      <thead><tr><th>Claim</th><th>Member</th><th>Diagnosis</th><th>ICD L1</th><th>Conf.</th><th>Provenance</th><th>Incurred</th><th>Status</th><th></th></tr></thead>
+      <tbody>${rows.map(r => `
+        <tr>
+          <td class="ox-mono" data-th="Claim">${esc(r.claimNumber)}</td>
+          <td class="ox-mono" data-th="Member">${esc(r.memberNumber)}</td>
+          <td data-th="Diagnosis">${esc(r.diagnosisText || '—')}${r.isChronic ? ' <span class="ox-badge ox-badge--warn">chronic</span>' : ''}</td>
+          <td class="ox-mono" data-th="ICD L1">${esc(r.level1Icd || '—')}${r.level1Name ? `<div class="ox-muted" style="font-size:11px">${esc(r.level1Name)}</div>` : ''}</td>
+          <td class="ox-table__num" data-th="Conf.">${r.level1Confidence != null ? Number(r.level1Confidence).toFixed(2) : '—'}</td>
+          <td data-th="Provenance"><span class="ox-badge ${settled(r) ? 'ox-badge--electric' : actionable(r) ? 'ox-badge--warn' : 'ox-badge--ok'}">${esc(r.level1Provenance || '—')}</span></td>
+          <td class="ox-table__num" data-th="Incurred">${inr(r.incurred)}</td>
+          <td data-th="Status">${codingBadge(r.codingStatus)}</td>
+          <td class="ox-right">${actionable(r)
+            ? `<button class="ox-btn ox-btn--primary ox-btn--sm" data-review="${r.claimCodingId}">Review →</button>`
+            : settled(r) ? `<span class="ox-muted" style="font-size:12px">v${r.codingVersion} settled</span>` : ''}</td>
+        </tr>`).join('')}</tbody>
+    </table></div>`}`;
+  panel.querySelectorAll('[data-review]').forEach(b => b.addEventListener('click', () => openReviewDrawer(caseId, b.dataset.review)));
+}
+
+function codingBadge(s) {
+  const map = { Unmapped: 'ox-badge--danger', InReview: 'ox-badge--warn', AutoAccepted: 'ox-badge--ok', HumanAccepted: 'ox-badge--electric', HumanCorrected: 'ox-badge--electric', Uncertain: 'ox-badge--neutral' };
+  return `<span class="ox-badge ${map[s] || 'ox-badge--neutral'}">${esc(s)}</span>`;
+}
+
+function openReviewDrawer(caseId, codingId) {
+  const r = CODING_ROWS.find(x => String(x.claimCodingId) === String(codingId));
+  if (!r) return;
+  const backdrop = $('#drawer-backdrop'), drawer = $('#drawer');
+  const suggested = r.level1Icd ? `${r.level1Icd} — ${r.level1Name || ''} (conf ${Number(r.level1Confidence).toFixed(2)})` : 'none — the machine could not code this row';
+  drawer.innerHTML = `
+    <div class="ox-mono-label">CLINICAL REVIEW — ${esc(r.claimNumber)}</div>
+    <p class="ox-muted" style="font-size:13px">${esc(r.diagnosisText || '(no diagnosis text)')} · member ${esc(r.memberNumber)} · ${inr(r.incurred)} incurred</p>
+    <div class="ox-ana" style="margin:10px 0">
+      <div class="ox-ana-row"><span class="ox-muted">AI suggestion</span><span>${esc(suggested)}</span></div>
+      <div class="ox-ana-row"><span class="ox-muted">Group</span><span>${esc(r.diseaseGroup || '—')}</span></div>
+      <div class="ox-ana-row"><span class="ox-muted">Benefit group</span><span>${esc(r.benefitGroup || '—')}</span></div>
+    </div>
+    <label class="ox-mono-label" for="rv-icd">CORRECTED ICD L1</label>
+    <input class="ox-input" id="rv-icd" placeholder="e.g. E11.9" value="${esc(r.level1Icd || '')}">
+    <label class="ox-mono-label" for="rv-name">DISEASE NAME</label>
+    <input class="ox-input" id="rv-name" placeholder="e.g. Type 2 Diabetes Mellitus" value="${esc(r.level1Name || '')}">
+    <label class="ox-mono-label" for="rv-notes">REVIEWER NOTES</label>
+    <input class="ox-input" id="rv-notes" placeholder="recorded permanently with the decision">
+    <div class="ox-banner ox-banner--info" style="margin-top:10px">Corrections join the golden dataset — the same diagnosis text codes automatically next time.</div>
+    <div class="ox-banner ox-banner--error ox-hide" id="rv-error" style="margin-top:8px"></div>
+    <div class="ox-row ox-row--wrap" style="gap:8px;margin-top:12px">
+      <button class="ox-btn ox-btn--primary" id="rv-correct">Save correction</button>
+      ${r.level1Icd ? '<button class="ox-btn ox-btn--ghost" id="rv-accept">Accept AI coding</button>' : ''}
+      <button class="ox-btn ox-btn--ghost" data-act="MarkedUncertain">Mark uncertain</button>
+      <button class="ox-btn ox-btn--ghost" data-act="NeedMoreInfo">Need more info</button>
+    </div>`;
+  backdrop.classList.remove('ox-hide'); drawer.classList.remove('ox-hide');
+  requestAnimationFrame(() => { backdrop.classList.add('open'); drawer.classList.add('open'); });
+  backdrop.onclick = closeDrawer;
+  const decide = async (decision, icd, name) => {
+    const err = $('#rv-error'); err.classList.add('ox-hide');
+    try {
+      const res = await post(`/api/v1/cases/${caseId}/coding/${codingId}/review`, { decision, icdLevel1: icd, diseaseName: name, comments: $('#rv-notes').value });
+      closeDrawer();
+      if (res.exceptionsResolved) { await post(`/api/v1/cases/${caseId}/pipeline/start`); }
+      route();
+    } catch (ex) { err.textContent = ex.message; err.classList.remove('ox-hide'); }
+  };
+  $('#rv-correct').addEventListener('click', () => decide('Corrected', $('#rv-icd').value.trim(), $('#rv-name').value.trim()));
+  const acc = $('#rv-accept');
+  if (acc) acc.addEventListener('click', () => decide('Accepted', null, null));
+  drawer.querySelectorAll('[data-act]').forEach(b => b.addEventListener('click', () => decide(b.dataset.act, null, null)));
+}
+
 // ── view: exceptions ───────────────────────────────────────────────────────
 async function viewExceptions() {
   $('#pagetitle').textContent = 'Exceptions';
@@ -488,10 +628,15 @@ async function viewExceptions() {
           <td data-th="Severity">${sevBadge(e.severity || (e.blocking ? 'Blocking' : 'Advisory'))}</td>
           <td data-th="Message">${esc(e.message)}</td>
           <td data-th="Fix at">${esc(e.resolutionTarget || '—')}</td>
-          <td class="ox-right">${e.caseId ? `<a class="ox-btn ox-btn--ghost ox-btn--sm" href="#/case/${e.caseId}">Open →</a>` : ''}</td>
+          <td class="ox-right">${isClinical(e.code)
+            ? `<a class="ox-btn ox-btn--primary ox-btn--sm" href="#/coding?case=${e.caseId}">Resolve →</a>`
+            : e.caseId ? `<a class="ox-btn ox-btn--ghost ox-btn--sm" href="#/case/${e.caseId}">Open →</a>` : ''}</td>
         </tr>`).join('')}</tbody>
     </table></div>`}`;
 }
+
+// clinical codes resolve in the coding workbench, not on the case page
+const isClinical = (code) => code === 'EXC-CLIN-UNMAPPED' || code === 'EXC-CLIN-REVIEW';
 
 // ── view: users (admin) ────────────────────────────────────────────────────
 async function viewUsers() {

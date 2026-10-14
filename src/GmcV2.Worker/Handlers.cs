@@ -372,19 +372,30 @@ public static class StageHandlers
     {
         public string Stage => "Standardize";
 
-        public Task<StageOutcome> ExecuteAsync(Case c, IGmcRepository repo)
+        public async Task<StageOutcome> ExecuteAsync(Case c, IGmcRepository repo)
         {
             var data = DemoPipelineData.For(c.CaseId);
-            return Task.FromResult(new StageOutcome
+
+            // Persist the standardized claims (ing.StdClaim projection) — the coding
+            // workspace joins against these rows. Claims are synthetic per case (no
+            // real StdClaimId exists yet), so the per-case override slot is the key.
+            var claims = StdClaims(data);
+            for (var i = 0; i < claims.Count; i++)
+                claims[i].StdClaimId = StandardizedClaims.Key(c.CaseId, i);
+            StandardizedClaims.Replace(c.CaseId, claims);
+            await repo.AddNoteAsync(c.CaseId, "Pipeline",
+                $"Standardized {data.Members.Count} members / {claims.Count} claims (DQ {data.DataQualityScore}).");
+
+            return new StageOutcome
             {
                 State = Enums.StageCompleted,
                 DetailJson = JsonSerializer.Serialize(new Dictionary<string, object?>
                 {
                     ["dqScore"] = data.DataQualityScore,
                     ["members"] = data.Members.Count,
-                    ["claims"] = data.Claims.Count,
+                    ["claims"] = claims.Count,
                 }),
-            });
+            };
         }
     }
 
@@ -398,15 +409,20 @@ public static class StageHandlers
         {
             var data = DemoPipelineData.For(c.CaseId);
             var diseases = await repo.GetDiseasesAsync();
+            var claims = StandardizedClaims.For(c.CaseId);
             decimal reviewCost = 0;
-            var totalCost = data.Claims.Sum(cl => cl.Incurred);
+            var totalCost = claims.Sum(cl => cl.IncurredAmount);
             var unmapped = 0;
 
-            foreach (var claim in data.Claims)
+            // Idempotent resume: keep human-reviewed codings, re-run the deterministic pass.
+            var existing = await repo.GetClaimCodingAsync(c.CaseId);
+            var existingByClaim = existing.Where(x => x.ClaimNumber is not null)
+                .GroupBy(x => x.ClaimNumber!).ToDictionary(g => g.Key, g => g.First());
+
+            foreach (var claim in claims)
             {
-                var match = diseases.FirstOrDefault(d => d.DiseaseName.Equals(claim.Disease, StringComparison.OrdinalIgnoreCase)
-                    || d.MatchKeywords.Any(k => claim.Disease.Contains(k, StringComparison.OrdinalIgnoreCase)));
-                if (match is null) { unmapped++; continue; }
+                var match = diseases.FirstOrDefault(d => d.DiseaseName.Equals(claim.DiseaseCategory, StringComparison.OrdinalIgnoreCase)
+                    || d.MatchKeywords.Any(k => (claim.DiseaseCategory ?? "").Contains(k, StringComparison.OrdinalIgnoreCase)));
                 // deterministic tier 0.98; ~0.3% of rows land in the review band at 0.85
                 // (0.85 sits in the 0.75–0.94 review band per tech §3.9).
                 // Selector must NOT assume claim-number shape (real TPAs vary wildly):
@@ -415,20 +431,59 @@ public static class StageHandlers
                     ? clN
                     : claim.ClaimNumber.Aggregate(17, (acc, ch) => (acc * 31 + ch) & 0x7FFFFFFF);
                 var conf = n % 597 == 0 ? 0.85m : 0.98m;
-                if (conf is >= 0.75m and < 0.95m) reviewCost += claim.Incurred;
+
+                if (match is null)
+                {
+                    unmapped++;
+                    await SaveCodingAsync(repo, c.CaseId, claim, existingByClaim, cc =>
+                    {
+                        cc.Level1Confidence = 0m;
+                        cc.Level1Provenance = Enums.TierFuzzy;
+                        cc.NeedsHumanReview = true;
+                        cc.CodingStatus = "Unmapped";
+                        cc.ReasonText = "no deterministic match — clinical review";
+                    });
+                    continue;
+                }
+
+                if (conf is >= 0.75m and < 0.95m) reviewCost += claim.IncurredAmount;
+                var inReviewBand = conf is >= 0.75m and < 0.95m;
+                await SaveCodingAsync(repo, c.CaseId, claim, existingByClaim, cc =>
+                {
+                    cc.Level1IcdCode = match.IcdLevel1;
+                    cc.Level1DiseaseName = match.DiseaseName;
+                    cc.Level1Confidence = conf;
+                    cc.Level1Provenance = Enums.TierMaster;
+                    cc.DiseaseGroup = match.DiseaseGroup;
+                    cc.IsChronic = match.IsChronic;
+                    cc.BenefitGroup = match.DiseaseGroup switch
+                    {
+                        "Ophthalmic" => "Cataract",
+                        "Maternity" => "Maternity",
+                        "KidneyUrology" => "KidneyUrology",
+                        _ => "Other",
+                    };
+                    cc.MaternityDeliveryType = match.DiseaseName.Contains("Caesarean", StringComparison.OrdinalIgnoreCase) ? "CSection"
+                        : match.DiseaseName.Contains("Normal", StringComparison.OrdinalIgnoreCase) ? "Normal" : null;
+                    cc.NeedsHumanReview = inReviewBand;
+                    cc.CodingStatus = inReviewBand ? "InReview" : "AutoAccepted";
+                    cc.ReasonText = inReviewBand ? "master keyword match — review band" : "master: exact match";
+                });
             }
 
+            var unmappedRows = existing.Where(x => x.CodingStatus == "Unmapped").ToList();
             var reviewSharePct = totalCost > 0 ? Math.Round(reviewCost / totalCost * 100m, 4) : 0m;
             var outcome = new StageOutcome
             {
                 DetailJson = JsonSerializer.Serialize(new Dictionary<string, object?>
                 {
-                    ["coded"] = data.Claims.Count, ["unmapped"] = unmapped, ["reviewSharePct"] = reviewSharePct,
+                    ["coded"] = claims.Count, ["unmapped"] = unmapped, ["reviewSharePct"] = reviewSharePct,
+                    ["unmappedTexts"] = unmappedRows.Select(x => x.ClaimNumber).ToList(),
                 }),
             };
 
             if (unmapped > 0)
-                outcome = new StageOutcome { State = outcome.State, DetailJson = outcome.DetailJson,  ToRaise = new List<CaseException>
+                outcome = new StageOutcome { State = outcome.State, DetailJson = outcome.DetailJson, ToRaise = new List<CaseException>
                 {
                     new()
                     {
@@ -436,6 +491,11 @@ public static class StageHandlers
                         SubjectType = "ClaimRows", SubjectRef = $"{unmapped}",
                         Message = $"{unmapped} claim row(s) could not be coded at all.",
                         ResolutionTarget = "Clinical Review Queue", ResumeStage = "CodeClinical",
+                        DetailJson = JsonSerializer.Serialize(new Dictionary<string, object?>
+                        {
+                            ["codingStatus"] = "Unmapped",
+                            ["workspaceHash"] = "#/coding",
+                        }),
                     },
                 } };
             else if (reviewSharePct >= 1m) // blocking when the review band covers ≥ 1% of cost
@@ -447,6 +507,11 @@ public static class StageHandlers
                         SubjectType = "ClaimRows", SubjectRef = "",
                         Message = $"Coding review band covers {reviewSharePct}% of claim cost (≥ 1%).",
                         ResolutionTarget = "Clinical Review Queue", ResumeStage = "CodeClinical",
+                        DetailJson = JsonSerializer.Serialize(new Dictionary<string, object?>
+                        {
+                            ["codingStatus"] = "InReview",
+                            ["workspaceHash"] = "#/coding",
+                        }),
                     },
                 } };
             else if (reviewSharePct > 0m) // advisory below 1% materiality — pipeline continues
@@ -458,9 +523,25 @@ public static class StageHandlers
                         SubjectType = "ClaimRows", SubjectRef = "",
                         Message = $"Coding review band covers {reviewSharePct}% of claim cost (below 1% materiality) — advisory.",
                         ResolutionTarget = "Clinical Review Queue", ResumeStage = "CodeClinical",
+                        DetailJson = JsonSerializer.Serialize(new Dictionary<string, object?>
+                        {
+                            ["codingStatus"] = "InReview",
+                            ["workspaceHash"] = "#/coding",
+                        }),
                     },
                 } };
             return outcome;
+        }
+
+        private static async Task SaveCodingAsync(IGmcRepository repo, long caseId, StdClaim claim,
+            Dictionary<string, ClaimCoding> existingByClaim, Action<ClaimCoding> fill)
+        {
+            var cc = existingByClaim.TryGetValue(claim.ClaimNumber, out var prev) && prev.CodingStatus is "HumanAccepted" or "HumanCorrected"
+                ? prev                        // never overwrite a human decision
+                : new ClaimCoding { CaseId = caseId, StdClaimId = claim.StdClaimId };
+            cc.ClaimNumber = claim.ClaimNumber;
+            fill(cc);
+            await repo.SaveClaimCodingAsync(cc);
         }
     }
 
@@ -780,5 +861,29 @@ public static class DemoPipelineData
         LastGuardrailResult = null;
         LastPricing = null;
         LastBenefitDelta = null;
+    }
+}
+
+/// <summary>
+/// Per-case standardized claims written by DemoStandardizeHandler and read by
+/// CodeClinical + the coding API. Case-scoped synthetic ids: (caseId << 20) | rowIdx —
+/// stable within a case, unique across cases, and never collide with future real
+/// ing.StdClaim identities. Thread-safe via the DemoPipelineData gate pattern.
+/// </summary>
+public static class StandardizedClaims
+{
+    private static readonly object Gate = new();
+    private static readonly Dictionary<long, List<StdClaim>> ByCase = new();
+
+    public static long Key(long caseId, int rowIdx) => (caseId << 20) | (uint)rowIdx;
+
+    public static void Replace(long caseId, List<StdClaim> claims)
+    {
+        lock (Gate) ByCase[caseId] = claims;
+    }
+
+    public static List<StdClaim> For(long caseId)
+    {
+        lock (Gate) return ByCase.TryGetValue(caseId, out var list) ? list : new List<StdClaim>();
     }
 }

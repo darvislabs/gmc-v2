@@ -54,6 +54,11 @@ public interface IGmcRepository
     Task<ColumnMapping?> GetLatestMappingAsync(long sourceColumnId);
     Task LearnSynonymAsync(ColumnSynonym syn);
 
+    // Clinical coding (ing.ClaimCoding / ing.CodingReview)
+    Task<List<ClaimCoding>> GetClaimCodingAsync(long caseId, string? codingStatus = null);
+    Task<ClaimCoding> SaveClaimCodingAsync(ClaimCoding coding);
+    Task AddCodingReviewAsync(CodingReview review);
+
     // Knowledge
     Task<List<DiseaseEntry>> GetDiseasesAsync();
     Task AddDiseaseAsync(DiseaseEntry d);

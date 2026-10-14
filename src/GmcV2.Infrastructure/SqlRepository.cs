@@ -944,6 +944,153 @@ public sealed partial class SqlRepository : IGmcRepository
         await cmd.ExecuteNonQueryAsync();
     }
 
+    // ─────────────────────────── clinical coding ───────────────────────────
+
+    public async Task<List<ClaimCoding>> GetClaimCodingAsync(long caseId, string? codingStatus = null)
+    {
+        await using var conn = await OpenAsync();
+        using var cmd = Cmd(conn, """
+            SELECT ClaimCodingId, StdClaimId, CaseId, CodingVersion, IsCurrent,
+                   Level1IcdCode, Level1DiseaseName, Level1Confidence, Level1Provenance,
+                   Level2IcdCode, Level2DiseaseName, Level2Confidence, Level2Provenance,
+                   DiseaseGroup, Department, IsChronic, BenefitGroup, MaternityDeliveryType,
+                   ReasonText, NeedsHumanReview, CodingStatus, GoldenEntryId, CreatedAtUtc, UpdatedAtUtc
+              FROM ing.ClaimCoding
+             WHERE CaseId = @case AND IsCurrent = 1
+               AND (@status IS NULL OR CodingStatus = @status)
+             ORDER BY ClaimCodingId
+            """);
+        cmd.Parameters.AddWithValue("@case", caseId);
+        cmd.Parameters.AddWithValue("@status", (object?)codingStatus ?? DBNull.Value);
+        using var r = await cmd.ExecuteReaderAsync();
+        var list = new List<ClaimCoding>();
+        while (await r.ReadAsync())
+            list.Add(new ClaimCoding
+            {
+                ClaimCodingId = L(r["ClaimCodingId"]),
+                StdClaimId = L(r["StdClaimId"]),
+                CaseId = L(r["CaseId"]),
+                CodingVersion = I(r["CodingVersion"]),
+                IsCurrent = B(r["IsCurrent"]),
+                Level1IcdCode = SN(r["Level1IcdCode"]),
+                Level1DiseaseName = SN(r["Level1DiseaseName"]),
+                Level1Confidence = DN(r["Level1Confidence"]),
+                Level1Provenance = SN(r["Level1Provenance"]),
+                Level2IcdCode = SN(r["Level2IcdCode"]),
+                Level2DiseaseName = SN(r["Level2DiseaseName"]),
+                Level2Confidence = DN(r["Level2Confidence"]),
+                Level2Provenance = SN(r["Level2Provenance"]),
+                DiseaseGroup = SN(r["DiseaseGroup"]),
+                Department = SN(r["Department"]),
+                IsChronic = r["IsChronic"] is DBNull ? null : B(r["IsChronic"]),
+                BenefitGroup = SN(r["BenefitGroup"]),
+                MaternityDeliveryType = SN(r["MaternityDeliveryType"]),
+                ReasonText = SN(r["ReasonText"]),
+                NeedsHumanReview = B(r["NeedsHumanReview"]),
+                CodingStatus = S(r["CodingStatus"]),
+                GoldenEntryId = LN(r["GoldenEntryId"]),
+                CreatedAtUtc = T(r["CreatedAtUtc"]),
+                UpdatedAtUtc = T(r["UpdatedAtUtc"]),
+            });
+        return list;
+    }
+
+    public async Task<ClaimCoding> SaveClaimCodingAsync(ClaimCoding c)
+    {
+        await using var conn = await OpenAsync();
+        if (c.ClaimCodingId == 0)
+        {
+            // New version: supersede the current row for this claim, then insert (one writer at a time is not
+            // guaranteed here, so re-check IsCurrent in the UPDATE predicate).
+            using var cmd = Cmd(conn, """
+                ;UPDATE ing.ClaimCoding SET IsCurrent = 0, UpdatedAtUtc = SYSUTCDATETIME()
+                  WHERE StdClaimId = @claim AND IsCurrent = 1;
+                INSERT ing.ClaimCoding (StdClaimId, CaseId, CodingVersion, IsCurrent,
+                    Level1IcdCode, Level1DiseaseName, Level1Confidence, Level1Provenance,
+                    Level2IcdCode, Level2DiseaseName, Level2Confidence, Level2Provenance,
+                    DiseaseGroup, Department, IsChronic, BenefitGroup, MaternityDeliveryType,
+                    ReasonText, NeedsHumanReview, CodingStatus, GoldenEntryId)
+                SELECT @claim, @case,
+                       ISNULL((SELECT MAX(CodingVersion) + 1 FROM ing.ClaimCoding WHERE StdClaimId = @claim), 1),
+                       1, @l1c, @l1n, @l1conf, @l1p, @l2c, @l2n, @l2conf, @l2p,
+                       @grp, @dept, @chronic, @benefit, @mat, @reason, @review, @status, @golden;
+                SELECT CAST(SCOPE_IDENTITY() AS BIGINT);
+                """);
+            cmd.Parameters.AddWithValue("@claim", c.StdClaimId);
+            cmd.Parameters.AddWithValue("@case", c.CaseId);
+            cmd.Parameters.AddWithValue("@l1c", (object?)c.Level1IcdCode ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@l1n", (object?)c.Level1DiseaseName ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@l1conf", (object?)c.Level1Confidence ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@l1p", (object?)c.Level1Provenance ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@l2c", (object?)c.Level2IcdCode ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@l2n", (object?)c.Level2DiseaseName ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@l2conf", (object?)c.Level2Confidence ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@l2p", (object?)c.Level2Provenance ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@grp", (object?)c.DiseaseGroup ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@dept", (object?)c.Department ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@chronic", (object?)c.IsChronic ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@benefit", (object?)c.BenefitGroup ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@mat", (object?)c.MaternityDeliveryType ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@reason", (object?)c.ReasonText ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@review", c.NeedsHumanReview);
+            cmd.Parameters.AddWithValue("@status", c.CodingStatus);
+            cmd.Parameters.AddWithValue("@golden", (object?)c.GoldenEntryId ?? DBNull.Value);
+            c.ClaimCodingId = (long)(await cmd.ExecuteScalarAsync())!;
+        }
+        else
+        {
+            using var cmd = Cmd(conn, """
+                UPDATE ing.ClaimCoding SET
+                    Level1IcdCode = @l1c, Level1DiseaseName = @l1n, Level1Confidence = @l1conf, Level1Provenance = @l1p,
+                    Level2IcdCode = @l2c, Level2DiseaseName = @l2n, Level2Confidence = @l2conf, Level2Provenance = @l2p,
+                    DiseaseGroup = @grp, Department = @dept, IsChronic = @chronic, BenefitGroup = @benefit,
+                    MaternityDeliveryType = @mat, ReasonText = @reason, NeedsHumanReview = @review,
+                    CodingStatus = @status, GoldenEntryId = @golden, UpdatedAtUtc = SYSUTCDATETIME()
+                 WHERE ClaimCodingId = @id
+                """);
+            cmd.Parameters.AddWithValue("@id", c.ClaimCodingId);
+            cmd.Parameters.AddWithValue("@l1c", (object?)c.Level1IcdCode ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@l1n", (object?)c.Level1DiseaseName ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@l1conf", (object?)c.Level1Confidence ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@l1p", (object?)c.Level1Provenance ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@l2c", (object?)c.Level2IcdCode ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@l2n", (object?)c.Level2DiseaseName ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@l2conf", (object?)c.Level2Confidence ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@l2p", (object?)c.Level2Provenance ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@grp", (object?)c.DiseaseGroup ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@dept", (object?)c.Department ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@chronic", (object?)c.IsChronic ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@benefit", (object?)c.BenefitGroup ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@mat", (object?)c.MaternityDeliveryType ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@reason", (object?)c.ReasonText ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@review", c.NeedsHumanReview);
+            cmd.Parameters.AddWithValue("@status", c.CodingStatus);
+            cmd.Parameters.AddWithValue("@golden", (object?)c.GoldenEntryId ?? DBNull.Value);
+            await cmd.ExecuteNonQueryAsync();
+        }
+        return c;
+    }
+
+    public async Task AddCodingReviewAsync(CodingReview review)
+    {
+        await using var conn = await OpenAsync();
+        using var cmd = Cmd(conn, """
+            INSERT ing.CodingReview (ClaimCodingId, Reviewer, Decision, SuggestedLevel1Json, SuggestedLevel2Json,
+                                     FinalLevel1Json, FinalLevel2Json, Comments, PromotedToGolden)
+            VALUES (@coding, @reviewer, @decision, @s1, @s2, @f1, @f2, @comments, @golden)
+            """);
+        cmd.Parameters.AddWithValue("@coding", review.ClaimCodingId);
+        cmd.Parameters.AddWithValue("@reviewer", review.Reviewer);
+        cmd.Parameters.AddWithValue("@decision", review.Decision);
+        cmd.Parameters.AddWithValue("@s1", (object?)review.SuggestedLevel1Json ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@s2", (object?)review.SuggestedLevel2Json ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@f1", (object?)review.FinalLevel1Json ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@f2", (object?)review.FinalLevel2Json ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@comments", (object?)review.Comments ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@golden", review.PromotedToGolden);
+        await cmd.ExecuteNonQueryAsync();
+    }
+
     // ─────────────────────────── knowledge ───────────────────────────
 
     public async Task<List<DiseaseEntry>> GetDiseasesAsync()
