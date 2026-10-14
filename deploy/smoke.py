@@ -83,8 +83,9 @@ ok("confidence ≥ 90", float(gr.get("confidence") or 0) >= 90, str(gr.get("conf
 
 exc = call("GET", "/api/v1/exceptions?status=open")
 exc_list = exc if isinstance(exc, list) else exc.get("exceptions", [])
-blocking = [e for e in exc_list if str(e.get("severity", "")).lower() != "advisory"]
-ok("no BLOCKING exceptions (advisory travel with quote per workflow §14)", len(blocking) == 0, f"blocking={len(blocking)} advisory={len(exc_list)}")
+# scope to the smoke-created case (cid) — real user cases legitimately carry blocking exceptions
+blocking = [e for e in exc_list if str(e.get("severity", "")).lower() != "advisory" and int(e.get("caseId", 0) or 0) == cid]
+ok("no BLOCKING exceptions on smoke case (advisory travel with quote per workflow §14)", len(blocking) == 0, f"blocking={len(blocking)} advisory={len(exc_list)}")
 
 auth = call("POST", "/api/v1/uw/authority/check", {"deviationPct": 7.9})
 ok("authority 7.9% → Escalate/SeniorUW", auth.get("decision") == "Escalate" and "Senior" in str(auth.get("requiredRole")), str(auth))
