@@ -19,7 +19,11 @@ public static class Program
 
         var builder = WebApplication.CreateBuilder(args);
         builder.Services.AddSingleton(repo);
-        builder.Services.AddSingleton<IAIProviderRegistry>(new AIProviderRegistry());
+        // AI gateway (AD-1/AD-2): env-driven; empty registry = deterministic-only.
+        IAIProviderRegistry aiRegistry = new AIProviderRegistry();
+        if (OllamaAIProvider.FromEnv() is { IsAvailable: true } ollama)
+            aiRegistry = new AIProviderRegistry { Extraction = ollama, Mapping = ollama, Clinical = ollama, Narrative = ollama };
+        builder.Services.AddSingleton(aiRegistry);
         builder.Services.AddDistributedMemoryCache();
         builder.Services.AddSession(o => { o.IdleTimeout = TimeSpan.FromHours(8); o.Cookie.HttpOnly = true; o.Cookie.IsEssential = true; });
         builder.Services.AddCors(o => o.AddDefaultPolicy(p => p.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod()));

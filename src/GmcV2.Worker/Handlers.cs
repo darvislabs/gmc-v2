@@ -13,14 +13,14 @@ namespace GmcV2.Worker;
 /// </summary>
 public static class StageHandlers
 {
-    public static IStageHandler[] Demo() => new IStageHandler[]
+    public static IStageHandler[] Demo(IAIProviderRegistry? ai = null) => new IStageHandler[]
     {
         new DemoIntakeHandler(),
         new DemoProfileHandler(),
         new DemoExtractDocumentsHandler(),
         new DemoMapHandler(),
         new DemoStandardizeHandler(),
-        new DemoCodeClinicalHandler(),
+        new DemoCodeClinicalHandler(ai),
         new DemoAnalyzeHandler(),
         new DemoGuardrailHandler(),
         new DemoPriceHandler(),
@@ -392,6 +392,9 @@ public static class StageHandlers
 
     private sealed class DemoCodeClinicalHandler : IStageHandler
     {
+        private readonly IAIProviderRegistry? _ai;
+        public DemoCodeClinicalHandler(IAIProviderRegistry? ai) => _ai = ai;
+
         public string Stage => "CodeClinical";
 
         public async Task<StageOutcome> ExecuteAsync(Case c, IGmcRepository repo)
@@ -402,10 +405,27 @@ public static class StageHandlers
             var totalCost = data.Claims.Sum(cl => cl.Incurred);
             var unmapped = 0;
 
+            // AI gap-fill (AD-1/AD-2): only when Clinical is wired and the deterministic
+            // tier missed. 20s budget; any failure/timeout/empty result = exact
+            // deterministic fallback (unmapped++). Demo data matches deterministically,
+            // so AI is never invoked on the pinned demo path.
+            var clinical = _ai?.Clinical is { IsAvailable: true } ? _ai.Clinical : null;
+
             foreach (var claim in data.Claims)
             {
                 var match = diseases.FirstOrDefault(d => d.DiseaseName.Equals(claim.Disease, StringComparison.OrdinalIgnoreCase)
                     || d.MatchKeywords.Any(k => claim.Disease.Contains(k, StringComparison.OrdinalIgnoreCase)));
+                if (match is null && clinical is not null)
+                {
+                    var (aiCode, _, aiConf, _) = await TryCodeAsync(clinical, claim.Disease, diseases);
+                    if (aiCode is null) { unmapped++; continue; }
+                    var aiEntry = ResolveAiEntry(aiCode, claim.Disease, diseases);
+                    if (aiEntry is null) { unmapped++; continue; }
+                    match = aiEntry;
+                    if (aiConf is >= 0.75m and < 0.95m) reviewCost += claim.Incurred; // same review band as deterministic tier
+                    if (aiConf < 0.75m) { unmapped++; continue; } // low confidence = not safely coded
+                    continue;
+                }
                 if (match is null) { unmapped++; continue; }
                 // deterministic tier 0.98; ~0.3% of rows land in the review band at 0.85
                 // (0.85 sits in the 0.75–0.94 review band per tech §3.9).
@@ -461,6 +481,49 @@ public static class StageHandlers
                     },
                 } };
             return outcome;
+        }
+
+        /// <summary>AI CodeAsync under a 20s budget: timeout/throw/empty → null (deterministic fallback). Never raises.</summary>
+        private static async Task<(string? Code, string? Proc, decimal Conf, string? Why)> TryCodeAsync(
+            IClinicalCodingAgent clinical, string diseaseText, List<DiseaseEntry> diseases)
+        {
+            try
+            {
+                var master = diseases
+                    .Where(d => !string.IsNullOrWhiteSpace(d.IcdLevel2) || !string.IsNullOrWhiteSpace(d.IcdLevel1))
+                    .Select(d => (Icd10: d.IcdLevel2 ?? d.IcdLevel1 ?? "", Description: d.DiseaseName))
+                    .ToList();
+                if (master.Count == 0) return (null, null, 0m, null);
+                var task = clinical.CodeAsync(diseaseText, master);
+                var done = await Task.WhenAny(task, Task.Delay(TimeSpan.FromSeconds(20)));
+                if (done != task) return (null, null, 0m, null); // timeout
+                var (code, proc, conf, why) = await task;
+                return (string.IsNullOrWhiteSpace(code) ? null : code.Trim(), proc, conf, why);
+            }
+            catch
+            {
+                return (null, null, 0m, null); // AD-2: AI failure is advisory, never blocking
+            }
+        }
+
+        /// <summary>Maps an AI-returned ICD code back to a DiseaseEntry: IcdLevel2/IcdLevel1 hit first, else best keyword similarity.</summary>
+        private static DiseaseEntry? ResolveAiEntry(string aiCode, string diseaseText, List<DiseaseEntry> diseases)
+        {
+            var code = aiCode.Trim();
+            var byIcd = diseases.FirstOrDefault(d =>
+                string.Equals(d.IcdLevel2, code, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(d.IcdLevel1, code, StringComparison.OrdinalIgnoreCase));
+            if (byIcd is not null) return byIcd;
+            // best keyword similarity: share of the entry's keywords present in the diagnosis text
+            DiseaseEntry? best = null;
+            var bestScore = 0;
+            foreach (var d in diseases)
+            {
+                if (d.MatchKeywords.Length == 0) continue;
+                var score = d.MatchKeywords.Count(k => diseaseText.Contains(k, StringComparison.OrdinalIgnoreCase));
+                if (score > bestScore) { bestScore = score; best = d; }
+            }
+            return best;
         }
     }
 
@@ -780,5 +843,6 @@ public static class DemoPipelineData
         LastGuardrailResult = null;
         LastPricing = null;
         LastBenefitDelta = null;
+        lock (Gate) CaseOverrides.Clear(); // test isolation: never leak per-case data across runs
     }
 }

@@ -10,6 +10,7 @@ namespace GmcV2.Tests;
 /// Killing mid-way is simulated by re-running RunAsync: the second run must
 /// complete without duplicating stage runs (idempotency via InputsHash).
 /// </summary>
+[Collection("PipelineSerial")] // shares DemoPipelineData statics with the other pipeline suites
 public class WorkerSmoke
 {
     private static async Task<Case> CreateDemoCaseAsync(IGmcRepository repo)

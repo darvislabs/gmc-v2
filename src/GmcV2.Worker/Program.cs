@@ -188,7 +188,10 @@ public static class Program
             });
         }
 
-        var orchestrator = new PipelineOrchestrator(repo, StageHandlers.Demo());
+        var orchestrator = new PipelineOrchestrator(repo, StageHandlers.Demo(),
+            OllamaAIProvider.FromEnv() is { IsAvailable: true } p
+                ? new AIProviderRegistry { Extraction = p, Mapping = p, Clinical = p, Narrative = p }
+                : null);
         Console.WriteLine($"Case {c.CaseNumber} (id {c.CaseId}) — running 13-stage pipeline ({(useSql ? "SqlRepository" : "InMemoryRepository")}, engines: {(EngineBridge.UsingRealCalculation ? "bound" : "local fallback")})...");
         var sw = System.Diagnostics.Stopwatch.StartNew();
         c = await orchestrator.RunAsync(c.CaseId);

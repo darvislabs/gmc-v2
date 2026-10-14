@@ -6,6 +6,7 @@ using Xunit;
 
 namespace GmcV2.Tests;
 
+[Collection("PipelineSerial")] // shares DemoPipelineData statics with the other pipeline suites
 public class ArtifactsNotifierTests
 {
     private static readonly string[][] DemoDocRows =

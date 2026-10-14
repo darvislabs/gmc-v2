@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using GmcV2.Core;
+using GmcV2.Infrastructure;
 
 namespace GmcV2.Worker;
 
@@ -55,10 +56,14 @@ public sealed class PipelineOrchestrator
     private readonly Dictionary<string, IStageHandler> _handlers;
     private static readonly JsonSerializerOptions JsonOpts = new(JsonSerializerDefaults.Web);
 
-    public PipelineOrchestrator(IGmcRepository repo, IStageHandler[] handlers)
+    /// <summary>Nullable AI gateway (AD-2): handlers use it to fill gaps only; null/empty = deterministic-only.</summary>
+    public IAIProviderRegistry? AI { get; }
+
+    public PipelineOrchestrator(IGmcRepository repo, IStageHandler[] handlers, IAIProviderRegistry? ai = null)
     {
         _repo = repo;
         _handlers = handlers.ToDictionary(h => h.Stage, StringComparer.OrdinalIgnoreCase);
+        AI = ai;
     }
 
     /// <summary>

@@ -131,13 +131,13 @@ public static class Api
         });
 
         // ── pipeline ─────────────────────────────────────────────────────────
-        app.MapPost("/api/v1/cases/{id:long}/pipeline/start", async (long id, IGmcRepository repo) =>
+        app.MapPost("/api/v1/cases/{id:long}/pipeline/start", async (long id, IGmcRepository repo, IAIProviderRegistry ai) =>
         {
             if (await repo.GetCaseAsync(id) is null) return Results.NotFound(new { error = "case not found" });
             // real uploaded data (parsed files) takes precedence; demo dataset is the fallback
             var c = await repo.GetCaseAsync(id);
             if (c is not null) RealDataBridge.TryRegister(id, c, repo);
-            var orch = new PipelineOrchestrator(repo, StageHandlers.Demo());
+            var orch = new PipelineOrchestrator(repo, StageHandlers.Demo(ai), ai);
             await orch.RunAsync(id);
             var fresh = await repo.GetCaseAsync(id); // fresh from DB so StageRuns reflect persisted runs
             var stages = fresh!.StageRuns;
