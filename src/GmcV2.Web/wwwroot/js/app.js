@@ -322,7 +322,7 @@ async function viewCase(id) {
     }
   });
   if (shouldRun || runBtn) startPipeline(id, { quiet: !runBtn });
-  if (quote) renderDecisions(id, quote);
+  if (quote) { renderDecisions(id, quote); wireQuoteOverride(id, quote); }
 }
 
 function stageTimeline(stages) {
@@ -354,7 +354,7 @@ async function startPipeline(id, { quiet = false } = {}) {
     const se = $('#stages'); if (se) se.innerHTML = stageTimeline(stages);
     const qs = $('#quote-section');
     const quote = quotes.filter(q => q.status === 'Current').at(-1) || quotes.at(-1);
-    if (qs && quote) { qs.innerHTML = quoteSection(quote); renderDecisions(id, quote); }
+    if (qs && quote) { qs.innerHTML = quoteSection(quote); renderDecisions(id, quote); wireQuoteOverride(id, quote); }
     // refresh the status badge + case header from the post-run case object
     const badgeEl = $('#view .ox-card .ox-right .ox-badge');
     if (badgeEl && c?.status) { badgeEl.textContent = c.status; badgeEl.className = 'ox-badge ' + badgeClass(c.status); }
@@ -396,6 +396,23 @@ function quoteSection(q) {
         <span class="ox-bridge-val ox-num">${esc(fmtComp(c))}</span>
         <span class="ox-bridge-basis ox-muted">${esc(c.basis || '')}</span>
       </div>`).join('')}</div>
+    ${canDecide() ? `
+    <div class="ox-hr"></div>
+    <div class="ox-row ox-row--between ox-row--wrap">
+      <div class="ox-mono-label">SUPERSEDE QUOTE — MANUAL OVERRIDE (§11)</div>
+      <button class="ox-btn ox-btn--sm" id="qov-toggle">Override…</button>
+    </div>
+    <div id="qov-form" class="ox-hide" style="margin-top:10px">
+      <div class="ox-grid-2" style="gap:10px">
+        <label class="ox-field"><span class="ox-mono-label">DISCOUNT %</span><input class="ox-input" id="qov-disc" type="number" min="0" max="50" step="0.5" placeholder="0"></label>
+        <label class="ox-field"><span class="ox-mono-label">OR MANUAL TECHNICAL PREMIUM ₹</span><input class="ox-input" id="qov-prem" type="number" min="0" step="1000" placeholder="auto"></label>
+      </div>
+      <label class="ox-field" style="margin-top:10px"><span class="ox-mono-label">REASON (MANDATORY, PERMANENTLY RECORDED)</span><input class="ox-input" id="qov-reason" placeholder="e.g. low claim ratio, chronic book loading"></label>
+      <div class="ox-row" style="margin-top:10px;gap:8px">
+        <button class="ox-btn ox-btn--primary ox-btn--sm" id="qov-apply">Create new version</button>
+        <button class="ox-btn ox-btn--sm" id="qov-cancel">Cancel</button>
+      </div>
+    </div>` : ''}
   </div>
   <div class="ox-grid-2" style="margin-top:16px">
     <div class="ox-card">
@@ -414,6 +431,26 @@ function fmtComp(c) {
   if (c.unit === '%') return pct(c.value);
   if ((c.unit || '').includes('₹')) return inr(c.value);
   return String(c.value);
+}
+
+// §11 quote override: discount % or manual premium → supersede with a new versioned quote
+function wireQuoteOverride(caseId, quote) {
+  const t = $('#qov-toggle'); if (!t) return;
+  t.addEventListener('click', () => $('#qov-form').classList.toggle('ox-hide'));
+  $('#qov-cancel').addEventListener('click', () => $('#qov-form').classList.add('ox-hide'));
+  $('#qov-apply').addEventListener('click', async () => {
+    const body = {
+      discountPct: $('#qov-disc').value ? Number($('#qov-disc').value) : null,
+      technicalPremium: $('#qov-prem').value ? Number($('#qov-prem').value) : null,
+      reason: $('#qov-reason').value.trim(),
+    };
+    if (!body.reason) { alert('Reason is mandatory for an override.'); return; }
+    try {
+      const res = await post(`/api/v1/cases/${caseId}/quotes/override`, body);
+      alert(`Quote V${res.versionNo} created — ${inr(res.technicalPremium)} technical premium.`);
+      route();
+    } catch (ex) { alert('Override failed: ' + ex.message); }
+  });
 }
 
 function guardrailPanel(g) {
