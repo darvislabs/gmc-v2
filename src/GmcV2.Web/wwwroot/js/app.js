@@ -372,7 +372,7 @@ function quoteSection(q) {
       <div class="ox-mono-label">QUOTE V${q.versionNo} · ${esc(q.status.toUpperCase())}</div>
       <div class="ox-right ox-muted" style="font-size:12px">${q.generationMode} · master ${esc(p.masterVersionRef || '—')}</div>
     </div>
-    <div class="ox-kpi-row" style="margin-top:10px">
+    <div class="ox-kpi-row ox-quote-kpis" style="margin-top:10px">
       <div class="ox-kpi ox-kpi--primary"><div class="ox-money-label">TECHNICAL PREMIUM</div><div class="ox-money">${inr(tech?.value ?? p.technicalPremium)}</div><div class="ox-kpi-sub">ANNUAL · PRE-TAX</div></div>
       <div class="ox-kpi"><div class="ox-money-label">GST 18%</div><div class="ox-money">${inr(gst?.value ?? 0)}</div><div class="ox-kpi-sub">CGST + SGST</div></div>
       <div class="ox-kpi ox-kpi--ok"><div class="ox-money-label">TOTAL INCL. GST</div><div class="ox-money">${inr(total?.value ?? 0)}</div><div class="ox-kpi-sub is-up">PAYABLE</div></div>

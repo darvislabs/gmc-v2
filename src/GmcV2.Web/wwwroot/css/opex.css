@@ -868,14 +868,30 @@ html[data-theme="light"] .ox-topbar { background: #FFFFFF; }
     }
     .ox-sidebar-open { transform: translateX(0); }
     .ox-content { padding: var(--ox-sp-4); }
-    .ox-kpi-row { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+    /* KPI: force 2-col ROW flow (base auto-flow:column would fight the template) */
+    .ox-kpi-row { display: grid; grid-auto-flow: row; grid-auto-columns: auto; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-bottom: var(--ox-sp-4); }
+    .ox-kpi { border-left-width: 2px; padding: var(--ox-sp-3) var(--ox-sp-4); }
+    .ox-kpi-row .ox-kpi:last-child:nth-child(odd) { grid-column: 1 / -1; }
     .ox-grid-2 { grid-template-columns: 1fr; }
     .ox-bridge-row { grid-template-columns: 28px 1fr auto; }
     .ox-bridge-basis { display: none; }
-    /* stacked table cards */
-    .ox-case-table thead { display: none; }
-    .ox-case-table tbody tr { display: block; border: 1px solid var(--ox-border); border-radius: var(--ox-radius); padding: 10px 12px; margin-bottom: 10px; }
-    .ox-case-table tbody td { display: flex; justify-content: space-between; align-items: center; border: none; padding: 4px 0; }
-    .ox-case-table tbody td::before { content: attr(data-th); font-family: var(--ox-font-mono); font-size: 10px; color: var(--ox-text-3); text-transform: uppercase; letter-spacing: .08em; }
-    .ox-case-table tbody td.ox-right::before { content: none; }
+    /* topbar breathing room */
+    .ox-topbar { padding: 0 var(--ox-sp-3); gap: 10px; }
+    .ox-pagetitle { font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1 1 auto; min-width: 0; }
+    .ox-topbar .ox-btn--sm { padding: 6px 10px; }
+    /* quote money row: 2x2 grid with big money readable */
+    .ox-quote-kpis .ox-kpi-row { grid-template-columns: repeat(2, 1fr); }
+    .ox-money { font-size: 17px; }
+    /* EVERY data table stacks as cards (not just case tables) */
+    .ox-table thead { display: none; }
+    .ox-table tbody tr { display: block; border: 1px solid var(--ox-border); border-radius: var(--ox-radius); padding: 10px 12px; margin-bottom: 10px; background: var(--ox-surface); }
+    .ox-table tbody td { display: flex; justify-content: space-between; align-items: center; gap: 12px; border: none; padding: 4px 0; text-align: right; overflow-wrap: anywhere; }
+    .ox-table tbody td::before { content: attr(data-th); font-family: var(--ox-font-mono); font-size: 10px; color: var(--ox-text-3); text-transform: uppercase; letter-spacing: .08em; text-align: left; flex: 0 0 auto; max-width: 40%; }
+    .ox-table tbody td.ox-right::before { content: none; }
+    .ox-table-wrap { border: none; background: transparent; max-height: none; overflow: visible; }
+    /* tap targets ≥44 */
+    .ox-btn { min-height: 44px; }
+    .ox-nav-item { padding: 12px 18px; min-height: 44px; }
+    .ox-bell, .ox-burger { width: 44px; height: 44px; }
+    .ox-table tbody td.ox-right a.ox-btn { min-height: 36px; }
 }

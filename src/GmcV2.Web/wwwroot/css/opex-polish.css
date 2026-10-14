@@ -167,3 +167,21 @@ h1, h2, h3, .ox-pagetitle { font-family: var(--ox-font-display); letter-spacing:
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
 }
+
+/* ---------------- 9. QUOTE MONEY TYPOGRAPHY (were undefined) ---------------- */
+.ox-money {
+  font-family: var(--ox-font-display); font-weight: 700;
+  font-size: 22px; letter-spacing: -0.02em; line-height: 1.2;
+  color: var(--ox-text); font-variant-numeric: tabular-nums;
+}
+.ox-money-label {
+  font-family: var(--ox-font-mono); font-size: 10px; font-weight: 600;
+  letter-spacing: 0.1em; text-transform: uppercase; color: var(--ox-text-3);
+}
+.ox-kpi-sub {
+  font-family: var(--ox-font-mono); font-size: 9.5px;
+  letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ox-text-3, rgba(252,252,252,.45)); margin-top: 2px;
+}
+.ox-kpi-sub.is-up { color: var(--ox-ok, #2FA45E); }
+.ox-num { font-variant-numeric: tabular-nums; }
