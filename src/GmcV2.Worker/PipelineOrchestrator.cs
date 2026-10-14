@@ -180,11 +180,11 @@ public sealed class PipelineOrchestrator
             catch (Exception ex)
             {
                 sw.Stop();
-                // Unhandled handler failure = EXC-AI-UNAVAILABLE-class pipeline failure: park it.
+                // Unhandled handler failure = pipeline failure: park it.
                 var exc = new CaseException
                 {
                     CaseId = caseId,
-                    Code = Enums.ExcAiUnavailable,
+                    Code = Enums.ExcPipelineFailure,
                     Blocking = true,
                     SubjectType = "Stage",
                     SubjectRef = stage,
@@ -213,6 +213,18 @@ public sealed class PipelineOrchestrator
 
             await _repo.CompleteStageRunAsync(run.StageRunId, outcome.State, outcome.DetailJson,
                 Math.Round(sw.ElapsedMilliseconds / 1000m, 3));
+
+            // a failed stage that now completed → auto-resolve its parked pipeline-failure exception
+            if (stage == c.CurrentStage)
+            {
+                try
+                {
+                    var open = await _repo.GetOpenExceptionsAsync(c.CaseId);
+                    foreach (var e in open.Where(e => e.ResumeStage == stage && e.Code == Enums.ExcPipelineFailure))
+                        await _repo.ResolveExceptionAsync(e.ExceptionId, "system:stage-recovered");
+                }
+                catch { /* resolution is best-effort */ }
+            }
 
             HydrateContextFromDetail(ctx, outcome.DetailJson);
 

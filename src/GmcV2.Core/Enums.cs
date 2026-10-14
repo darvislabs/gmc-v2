@@ -55,6 +55,7 @@ public static class Enums
     public const string ExcPrcInvalid = "EXC-PRC-INVALID";
     public const string ExcAiUnavailable = "EXC-AI-UNAVAILABLE";
     public const string ExcAuthLimit = "EXC-AUTH-LIMIT";
+    public const string ExcPipelineFailure = "EXC-PIPELINE-FAILURE";
 
     /// <summary>All 13 codes. Blocking codes park the case; advisory travel with the quote.</summary>
     public static readonly (string Code, bool Blocking)[] ExceptionCatalogue =
@@ -63,7 +64,7 @@ public static class Enums
         (ExcMapRequiredMissing, true), (ExcMapDuplicateTarget, true), (ExcStdDqLow, true),
         (ExcClinUnmapped, true), (ExcClinReview, true), (ExcGrdFailed, true),
         (ExcPrcMasterMissing, true), (ExcPrcInvalid, true),
-        (ExcAiUnavailable, true), (ExcAuthLimit, false),
+        (ExcAiUnavailable, true), (ExcAuthLimit, false), (ExcPipelineFailure, true),
     };
 
     // ─── Decision actions (tech §3.6) ───

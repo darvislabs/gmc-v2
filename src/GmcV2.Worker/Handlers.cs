@@ -408,9 +408,13 @@ public static class StageHandlers
                     || d.MatchKeywords.Any(k => claim.Disease.Contains(k, StringComparison.OrdinalIgnoreCase)));
                 if (match is null) { unmapped++; continue; }
                 // deterministic tier 0.98; ~0.3% of rows land in the review band at 0.85
-                // (0.85 sits in the 0.75–0.94 review band per tech §3.9)
-                var n = int.Parse(claim.ClaimNumber.AsSpan(2));
-                var conf = n % 597 == 0 ? 0.85m : 0.98m; // ~7 of 4,180 rows in the review band
+                // (0.85 sits in the 0.75–0.94 review band per tech §3.9).
+                // Selector must NOT assume claim-number shape (real TPAs vary wildly):
+                // canonical CL<digits> keeps its §13 semantics; anything else uses a stable hash.
+                var n = claim.ClaimNumber.Length > 2 && claim.ClaimNumber[0] == 'C' && claim.ClaimNumber[1] == 'L' && int.TryParse(claim.ClaimNumber.AsSpan(2), out var clN)
+                    ? clN
+                    : claim.ClaimNumber.Aggregate(17, (acc, ch) => (acc * 31 + ch) & 0x7FFFFFFF);
+                var conf = n % 597 == 0 ? 0.85m : 0.98m;
                 if (conf is >= 0.75m and < 0.95m) reviewCost += claim.Incurred;
             }
 
