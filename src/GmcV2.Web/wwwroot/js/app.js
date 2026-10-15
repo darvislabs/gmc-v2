@@ -28,6 +28,11 @@ let ME = null;
 const ROLE_HOME = { SalesAgent: 'Sales', Underwriter: 'Underwriter', SeniorUnderwriter: 'Senior UW', VicePresident: 'VP', Admin: 'Admin' };
 const canDecide = () => ['Underwriter', 'SeniorUnderwriter', 'VicePresident', 'Admin'].includes(ME?.role);
 const isAdmin = () => ME?.role === 'Admin';
+// views-analytics.js is a separate script — expose the session helpers globally (const in an
+// IIFE is script-scoped, invisible to other scripts; this bit us in production).
+window.canDecide = canDecide; window.isAdmin = isAdmin; window.getME = () => ME;
+// shared view helpers used by views-*.js (separate scripts; consts here are IIFE-scoped)
+window.$ = $; window.esc = esc; window.inr = inr; window.api = api;
 
 // ── badges ─────────────────────────────────────────────────────────────────
 function badge(status) {
@@ -102,7 +107,7 @@ const routes = {
   '#/case': viewCase,
   '#/coding': viewCoding,
   '#/mapping': viewMapping,
-  '#/analytics': viewAnalytics,
+  '#/analytics': (...a) => viewAnalytics(...a),
   '#/benefits': viewBenefits,
   '#/quote': viewFinalQuote,
   '#/standardize': viewStandardize,

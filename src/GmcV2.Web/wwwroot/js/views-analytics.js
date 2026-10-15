@@ -1,3 +1,4 @@
+window.__panelErr = null;
 // ── UW Analytics (prototype §5) ─────────────────────────────────────────────
 async function viewAnalytics() {
   if (!canDecide()) { $('#view').innerHTML = '<div class="ox-banner ox-banner--error">Underwriters only.</div>'; return; }
@@ -24,12 +25,15 @@ async function renderAnalyticsPanel(caseId) {
   el.innerHTML = '<div class="ox-skeleton" style="height:160px"></div>';
   let d, my;
   try {
+    localStorage.setItem('gmc_panel_debug', 'fetching ' + caseId);
     [d, my] = await Promise.all([
       api(`/api/v1/cases/${caseId}/analytics`),
       api(`/api/v1/cases/${caseId}/multiyear`).catch(() => null),
     ]);
+    localStorage.setItem('gmc_panel_debug', 'fetched ok');
   } catch (ex) {
-    el.innerHTML = `<div class="ox-banner ox-banner--error">${esc(ex.message)}</div>`; return;
+    localStorage.setItem('gmc_panel_debug', 'catch: ' + (ex && ex.message || ex));
+    el.innerHTML = `<div class="ox-banner ox-banner--error">PANEL-ERR: ${esc(ex && ex.message || String(ex))}</div>`; return;
   }
   if (!d.computed) { el.innerHTML = `<div class="ox-banner ox-banner--warn">${esc(d.message || 'Run the pipeline first.')}</div>`; return; }
   const a = d.snapshot;

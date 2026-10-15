@@ -77,8 +77,8 @@ public static class Pages
     <div class="ox-footer">GMC v2.0 · deterministic underwriting core · Opexminds design system</div>
   </div>
 </div>
-<script src="/js/views-analytics.js"></script>
-<script src="/js/app.js"></script>
+<script src="/js/views-analytics.js?v=19"></script>
+<script src="/js/app.js?v=19"></script>
 </body>
 </html>
 """;
