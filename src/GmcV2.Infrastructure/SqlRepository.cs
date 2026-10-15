@@ -839,6 +839,48 @@ public sealed partial class SqlRepository : IGmcRepository
         return Convert.ToInt32(r);
     }
 
+    public async Task<Dictionary<string, decimal>> GetFormulaConfigAsync()
+    {
+        await using var conn = await OpenAsync();
+        using var cmd = Cmd(conn, """
+            IF OBJECT_ID('uw.FormulaConfig') IS NULL
+                CREATE TABLE uw.FormulaConfig (ConfigKey NVARCHAR(64) NOT NULL PRIMARY KEY, ConfigValue DECIMAL(18,4) NOT NULL);
+            SELECT ConfigKey, ConfigValue FROM uw.FormulaConfig
+            """);
+        using var r = await cmd.ExecuteReaderAsync();
+        var dict = new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["TrendPct"] = 8.0m,   // engine defaults when unset
+            ["IbnrPct"] = 5.0m,
+        };
+        while (await r.ReadAsync())
+            dict[S(r["ConfigKey"])] = D(r["ConfigValue"]);
+        return dict;
+    }
+
+    public async Task SaveFormulaConfigAsync(Dictionary<string, decimal> values)
+    {
+        await using var conn = await OpenAsync();
+        using var cmd = Cmd(conn, """
+            IF OBJECT_ID('uw.FormulaConfig') IS NULL
+                CREATE TABLE uw.FormulaConfig (ConfigKey NVARCHAR(64) NOT NULL PRIMARY KEY, ConfigValue DECIMAL(18,4) NOT NULL);
+            """);
+        await cmd.ExecuteNonQueryAsync();
+        foreach (var kv in values)
+        {
+            using var up = Cmd(conn, """
+                MERGE uw.FormulaConfig AS t
+                USING (SELECT @k AS ConfigKey, @v AS ConfigValue) AS s
+                ON t.ConfigKey = s.ConfigKey
+                WHEN MATCHED THEN UPDATE SET ConfigValue = s.ConfigValue
+                WHEN NOT MATCHED THEN INSERT (ConfigKey, ConfigValue) VALUES (s.ConfigKey, s.ConfigValue);
+                """);
+            up.Parameters.AddWithValue("@k", kv.Key);
+            up.Parameters.AddWithValue("@v", kv.Value);
+            await up.ExecuteNonQueryAsync();
+        }
+    }
+
     public async Task<bool> HasRawRowsAsync(long caseId)
     {
         await using var conn = await OpenAsync();

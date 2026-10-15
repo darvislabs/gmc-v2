@@ -44,6 +44,7 @@ public static class Program
         StandardizeApi.Map(app);
         RuleConfigApi.Map(app);
         MultiYearApi.Map(app);
+        FormulaConfigApi.Map(app);
         MastersUploadApi.Map(app);
         Pages.MapAll(app);
 

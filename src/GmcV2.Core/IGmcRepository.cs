@@ -52,6 +52,10 @@ public interface IGmcRepository
     // SI scenario (prototype v74 step 5)
     Task<List<StdClaim>> GetStdClaimsAsync(long caseId);
     Task<int> GetStdMemberCountAsync(long caseId);
+
+    // Formula governance (prototype §Admin console)
+    Task<Dictionary<string, decimal>> GetFormulaConfigAsync();
+    Task SaveFormulaConfigAsync(Dictionary<string, decimal> values);
     Task SaveStdClaimsAsync(long caseId, IReadOnlyList<StdClaim> claims);
     Task<bool> HasRawRowsAsync(long caseId);
     Task<SIScenarioRow?> GetSIScenarioAsync(long caseId);

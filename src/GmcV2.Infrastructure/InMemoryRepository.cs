@@ -482,6 +482,10 @@ public sealed class InMemoryRepository : IGmcRepository
     private readonly Dictionary<long, SIScenarioRow> _siScenarios = new();
 
     public Task<int> GetStdMemberCountAsync(long caseId) => Task.FromResult(0);
+    private readonly Dictionary<string, decimal> _formulas = new() { ["TrendPct"] = 8.0m, ["IbnrPct"] = 5.0m };
+    public Task<Dictionary<string, decimal>> GetFormulaConfigAsync() => Task.FromResult(new Dictionary<string, decimal>(_formulas));
+    public Task SaveFormulaConfigAsync(Dictionary<string, decimal> values)
+    { foreach (var kv in values) _formulas[kv.Key] = kv.Value; return Task.CompletedTask; }
     public Task SaveStdClaimsAsync(long caseId, IReadOnlyList<StdClaim> claims)
     {
         lock (_gate) _stdClaims[caseId] = claims.Select(c => new StdClaim
