@@ -79,6 +79,7 @@ public sealed class QuoteVersion
     public string? RevisionNotes { get; set; }
     public decimal GrossPremium { get; set; }
     public decimal NetPremium { get; set; }
+    public int CoveredLives { get; set; }
     public string? InputsHash { get; set; }
     public PricingResult? Pricing { get; set; }
     public AnalyticsSnapshot? Analytics { get; set; }

@@ -651,6 +651,7 @@ public sealed partial class SqlRepository : IGmcRepository
         RevisionNotes = SN(r["RevisionNotes"]),
         SupersedesQuoteVersionId = LN(r["SupersedesQuoteVersionId"]) is { } sv ? (int?)checked((int)sv) : null,
         GrossPremium = D(r["PremiumBeforeGst"]),
+        CoveredLives = I(r["CoveredLives"]),
         InputsHash = SN(r["InputsHash"]),
         Pricing = Jd<PricingResult>(SN(r["PricingJson"])),
         Analytics = Jd<AnalyticsSnapshot>(SN(r["AnalyticsJson"])),
@@ -662,7 +663,7 @@ public sealed partial class SqlRepository : IGmcRepository
 
     private const string QuoteSelect = """
         SELECT QuoteVersionId, CaseId, VersionNo, Status, GenerationMode, RevisionReason, RevisionNotes,
-               SupersedesQuoteVersionId, PremiumBeforeGst, InputsHash, PricingJson, AnalyticsJson,
+               SupersedesQuoteVersionId, PremiumBeforeGst, CoveredLives, InputsHash, PricingJson, AnalyticsJson,
                GuardrailsJson, BenefitDeltaJson, CreatedAtUtc, CreatedBy
           FROM uw.QuoteVersion
         """;

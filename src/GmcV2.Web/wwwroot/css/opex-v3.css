@@ -1,0 +1,162 @@
+/* ==================================================================
+   GMC v2 — OPEXMINDS V3 SHELL (role-first prototype components)
+   Loaded AFTER opex.css + opex-polish.css. Uses only --ox-* tokens;
+   layout mirrors Dhrumil's approved prototype (header / rolecards /
+   queues / 9-step stepper / workbench / admin console).
+   ================================================================== */
+
+/* ---------------- 1. TOPBAR ---------------- */
+.v3-topbar {
+    background: var(--ox-surface);
+    border-bottom: 1px solid var(--ox-border);
+    padding: 10px 24px;
+    display: flex; gap: 16px; align-items: center; justify-content: space-between;
+    position: sticky; top: 0; z-index: 50;
+    backdrop-filter: blur(12px);
+}
+html[data-theme="light"] .v3-topbar { background: #FFFFFF; }
+.v3-brand-group { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.v3-brand-logo {
+    width: 36px; height: 36px; flex: 0 0 36px;
+    background: var(--ox-vivid); border-radius: 8px;
+    display: flex; align-items: center; justify-content: center; color: #fff;
+}
+.v3-brand {
+    font-family: var(--ox-font-display); font-weight: 700; font-size: 17px;
+    letter-spacing: -0.02em; color: var(--ox-text); white-space: nowrap;
+}
+.v3-sub {
+    font-size: 10px; color: var(--ox-text-3);
+    font-family: var(--ox-font-mono); text-transform: uppercase; letter-spacing: 0.08em;
+}
+.v3-rolebar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
+
+/* ---------------- 2. PAGE WRAP ---------------- */
+.v3-wrap { max-width: 1360px; margin: 0 auto; padding: 24px 24px 48px; }
+
+/* ---------------- 3. LOGIN ROLECARDS ---------------- */
+.v3-loginbox {
+    max-width: 620px; margin: 56px auto;
+    background: var(--ox-surface); border: 1px solid var(--ox-border);
+    border-radius: 20px; padding: 32px; box-shadow: var(--ox-shadow-card);
+}
+.v3-loginbox h1 { font-size: 26px; margin: 0 0 6px; }
+.v3-rolecards { display: grid; grid-template-columns: 1fr; gap: 16px; margin-top: 20px; }
+@media (min-width: 900px) { .v3-rolecards { grid-template-columns: 1fr 1fr; } }
+.v3-rolecard {
+    border: 1px solid var(--ox-border); border-radius: 14px; padding: 22px;
+    cursor: pointer; background: var(--ox-surface-2);
+    transition: border-color 180ms var(--ox-ease-out), transform 180ms var(--ox-ease-out), box-shadow 180ms var(--ox-ease-out);
+}
+.v3-rolecard:hover { border-color: var(--ox-vivid); transform: translateY(-2px); box-shadow: var(--ox-shadow-hover); }
+.v3-rolecard h2 { margin: 0 0 8px; font-size: 18px; }
+.v3-rolecard p { color: var(--ox-text-2); font-size: 12.5px; line-height: 1.55; margin: 0 0 14px; }
+
+/* ---------------- 4. QUEUE SCREENS ---------------- */
+.v3-head-row { display: flex; gap: 12px; align-items: flex-start; justify-content: space-between; margin-bottom: 20px; flex-wrap: wrap; }
+.v3-head-row h1 { font-size: 26px; margin: 0 0 4px; }
+.v3-head-row p { color: var(--ox-text-2); margin: 0; font-size: 13px; }
+.v3-grid { display: grid; grid-template-columns: repeat(12, 1fr); gap: 16px; }
+.v3-c4 { grid-column: span 4; } .v3-c6 { grid-column: span 6; }
+.v3-c8 { grid-column: span 8; } .v3-c12 { grid-column: span 12; }
+.v3-c3 { grid-column: span 3; }
+.v3-kpi { background: var(--ox-surface); border: 1px solid var(--ox-border); border-left: 3px solid var(--ox-vivid); border-radius: var(--ox-radius-lg); padding: 16px 20px; box-shadow: var(--ox-shadow-card); }
+.v3-kpi .v3-metric { font-family: var(--ox-font-display); font-size: 28px; font-weight: 800; letter-spacing: -0.03em; color: var(--ox-text); line-height: 1.15; }
+.v3-small { font-size: 12px; color: var(--ox-text-3); }
+
+.v3-queue-tabs { display: flex; gap: 8px; flex-wrap: wrap; }
+.v3-queue-tab {
+    background: var(--ox-surface-2); color: var(--ox-text-3);
+    border: 1px solid var(--ox-border); border-radius: var(--ox-radius-sm);
+    padding: 7px 14px; font-size: 12.5px; font-weight: 600; cursor: pointer;
+    transition: all 140ms var(--ox-ease-out);
+}
+.v3-queue-tab:hover { color: var(--ox-text); border-color: var(--ox-border-strong); }
+.v3-queue-tab.active { background: var(--ox-vivid); color: #fff; border-color: var(--ox-vivid); }
+
+/* ---------------- 5. STEPPER ---------------- */
+.v3-stepper {
+    display: grid; grid-template-columns: repeat(9, 1fr); gap: 6px;
+    margin-bottom: 22px; overflow-x: auto; padding-bottom: 4px;
+}
+.v3-step {
+    background: var(--ox-surface); border: 1px solid var(--ox-border);
+    border-radius: 10px; padding: 9px 11px; cursor: pointer; min-width: 96px;
+    transition: border-color 160ms var(--ox-ease-out), background 160ms var(--ox-ease-out);
+}
+.v3-step span { font-family: var(--ox-font-mono); font-size: 9.5px; color: var(--ox-text-3); letter-spacing: 0.1em; }
+.v3-step b { display: block; color: var(--ox-text); margin-top: 2px; font-size: 11.5px; font-weight: 600; font-family: var(--ox-font-display); }
+.v3-step.active { border: 2px solid var(--ox-vivid); background: rgba(27, 94, 255, 0.07); }
+.v3-step.done { background: rgba(52, 199, 89, 0.07); border-color: rgba(52, 199, 89, 0.35); }
+.v3-step.done b { color: var(--ox-success); }
+
+/* ---------------- 6. PANELS / CARDS ---------------- */
+.v3-panel { display: none; }
+.v3-panel.active { display: block; animation: v3fadeIn 240ms var(--ox-ease-out); }
+@keyframes v3fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.v3-card {
+    background: var(--ox-surface); border: 1px solid var(--ox-border);
+    border-radius: var(--ox-radius-lg); padding: 20px; box-shadow: var(--ox-shadow-card);
+    margin-bottom: 16px;
+}
+.v3-card h2 { font-size: 17px; margin: 0 0 12px; }
+.v3-card h3 { font-size: 14px; margin: 0 0 8px; }
+.v3-card > p { color: var(--ox-text-2); font-size: 13px; }
+.v3-upload {
+    border: 2px dashed var(--ox-border-strong); border-radius: 14px; padding: 18px;
+    background: var(--ox-surface-2); transition: border-color 180ms var(--ox-ease-out);
+}
+.v3-upload:hover { border-color: var(--ox-vivid); }
+.v3-upload input[type="file"] { width: 100%; color: var(--ox-text-3); font-size: 12px; }
+.v3-footerbar {
+    display: flex; justify-content: space-between; gap: 12px; align-items: center;
+    margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--ox-border); flex-wrap: wrap;
+}
+.v3-formula-input { max-width: 160px; }
+
+/* ---------------- 7. LIVE PREMIUM GRADIENT CARD ---------------- */
+.v3-live-premium {
+    background: linear-gradient(135deg, var(--ox-midnight), #123568);
+    color: #fff; border-radius: 16px; padding: 20px;
+    box-shadow: 0 10px 30px rgba(10, 22, 40, 0.35);
+}
+.v3-live-premium .v3-live-amount {
+    font-family: var(--ox-font-display); font-size: 30px; font-weight: 900;
+    margin: 4px 0; letter-spacing: -0.02em; color: #fff;
+}
+.v3-live-premium .v3-small { color: var(--ox-electric); }
+html[data-theme="light"] .v3-live-premium .v3-small { color: #9BD8FF; }
+
+/* ---------------- 8. MISC ---------------- */
+.v3-pill-note {
+    padding: 12px 16px; border-radius: 12px;
+    background: rgba(27, 94, 255, 0.06); border: 1px solid rgba(27, 94, 255, 0.18);
+    color: var(--ox-text); font-size: 13px;
+}
+.v3-hidden { display: none !important; }
+.v3-drawer {
+    position: fixed; right: 0; top: 0; width: min(560px, 100%); height: 100vh;
+    background: var(--ox-surface); box-shadow: -10px 0 40px rgba(0, 0, 0, 0.5);
+    z-index: 9999; padding: 24px; overflow: auto; border-left: 1px solid var(--ox-border);
+}
+.v3-drawer.hidden { display: none; }
+.v3-drawer-backdrop {
+    position: fixed; inset: 0; background: rgba(0, 0, 0, 0.5); z-index: 9998;
+}
+.v3-drawer-backdrop.hidden { display: none; }
+
+/* ---------------- 9. MOBILE ---------------- */
+@media (max-width: 768px) {
+    .v3-topbar { padding: 8px 12px; gap: 8px; flex-wrap: wrap; }
+    .v3-sub { display: none; }
+    .v3-brand { font-size: 14px; }
+    .v3-wrap { padding: 14px 12px 40px; }
+    .v3-grid { gap: 10px; }
+    .v3-c3, .v3-c4, .v3-c6, .v3-c8 { grid-column: span 12; }
+    .v3-head-row { flex-direction: column; align-items: stretch; }
+    .v3-head-row > div:last-child { display: flex; gap: 8px; }
+    .v3-stepper { grid-template-columns: repeat(9, 120px); }
+    .v3-loginbox { margin: 20px 12px; padding: 22px; }
+    .v3-rolecard { padding: 16px; }
+    .v3-drawer { width: 100%; }
+}
