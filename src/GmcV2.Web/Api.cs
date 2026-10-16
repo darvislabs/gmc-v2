@@ -194,8 +194,12 @@ public static class Api
             return Results.Json(new { decision, requiredRole, deviationPct = dto.DeviationPct });
         });
 
-        app.MapPost("/api/v1/uw/decisions", async (DecisionDto dto, IGmcRepository repo) =>
+        app.MapPost("/api/v1/uw/decisions", async (DecisionDto dto, IGmcRepository repo, HttpContext ctx) =>
         {
+            // Underwriting decisions are UW-family only (QA finding: sales could post approvals).
+            var role = ctx.Session.GetString("role");
+            if (role is null || !new[] { "Underwriter", "SeniorUnderwriter", "ChiefUnderwriter", "Admin" }.Contains(role, StringComparer.OrdinalIgnoreCase))
+                return Results.StatusCode(403);
             var valid = new[] { "Approve", "ApproveWithChanges", "Reject", "Decline", "Revise", "Escalate", "ManualQuote", "ReturnForClarification", "NeedMoreInfo" };
             if (!valid.Contains(dto.Action, StringComparer.OrdinalIgnoreCase))
                 return Results.BadRequest(new { error = $"action must be one of {string.Join(", ", valid)}" });

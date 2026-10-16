@@ -31,6 +31,25 @@ public static class Program
         app.UseCors();
         app.UseSession();
 
+        // Global API auth gate: every /api/* route requires an authenticated session,
+        // except auth endpoints (login/logout/me) and health. Reads were previously open.
+        app.Use(async (ctx, next) =>
+        {
+            var path = ctx.Request.Path.Value ?? "";
+            var isApi = path.StartsWith("/api/", StringComparison.Ordinal);
+            var isPublic = path.StartsWith("/api/v1/auth/", StringComparison.Ordinal)
+                        || path.StartsWith("/api/health", StringComparison.Ordinal)
+                        || path == "/health";
+            if (isApi && !isPublic && ctx.Session.GetString("userId") is null)
+            {
+                ctx.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                ctx.Response.ContentType = "application/json";
+                await ctx.Response.WriteAsync("{\"error\":\"authentication required\"}");
+                return;
+            }
+            await next();
+        });
+
         Api.MapAll(app);
         ApiAdmin.MapAll(app);
         ApiCoding.MapAll(app);
