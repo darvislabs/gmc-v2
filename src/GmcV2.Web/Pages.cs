@@ -89,7 +89,7 @@ public static class Pages
 <main id="v3-root"></main>
 
 <script src="/js/views-analytics.js?v=21"></script>
-<script src="/js/app-v3.js?v=1"></script>
+<script src="/js/app-v3.js?v=2"></script>
 </body>
 </html>
 """;

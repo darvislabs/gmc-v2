@@ -12,8 +12,10 @@ public static class FormulaConfigApi
         app.MapGet("/api/v1/admin/formulas", async (IGmcRepository repo) =>
             Results.Json(await repo.GetFormulaConfigAsync()));
 
-        app.MapPost("/api/v1/admin/formulas", async (Dictionary<string, decimal> dto, IGmcRepository repo) =>
+        app.MapPost("/api/v1/admin/formulas", async (Dictionary<string, decimal> dto, IGmcRepository repo, HttpContext ctx) =>
         {
+            if (!string.Equals(ctx.Session.GetString("role"), "Admin", StringComparison.OrdinalIgnoreCase))
+                return Results.StatusCode(403);
             // accepted keys: TrendPct, IbnrPct (extensible)
             var allowed = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "TrendPct", "IbnrPct" };
             foreach (var kv in dto)

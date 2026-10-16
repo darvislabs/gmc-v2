@@ -145,6 +145,66 @@ html[data-theme="light"] .v3-live-premium .v3-small { color: #9BD8FF; }
 }
 .v3-drawer-backdrop.hidden { display: none; }
 
+/* ---------------- 10. SUB-TABS (P5 analytics / P8 benefits / admin) ---------------- */
+.v3-subtabs, .v3-admin-tabs {
+    display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px;
+}
+.v3-subtab, .v3-admin-tab {
+    background: var(--ox-surface-2); color: var(--ox-text-3);
+    border: 1px solid var(--ox-border); border-radius: 999px;
+    padding: 8px 16px; font-size: 12.5px; font-weight: 600; cursor: pointer;
+    transition: all 140ms var(--ox-ease-out);
+}
+.v3-subtab:hover, .v3-admin-tab:hover { color: var(--ox-text); border-color: var(--ox-border-strong); }
+.v3-subtab.active, .v3-admin-tab.active {
+    background: var(--ox-vivid); color: #fff; border-color: var(--ox-vivid);
+    box-shadow: 0 4px 14px rgba(27, 94, 255, 0.25);
+}
+
+/* ---------------- 11. UW DECISION CARDS ---------------- */
+.v3-decision-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin: 14px 0; }
+@media (min-width: 900px) { .v3-decision-grid { grid-template-columns: repeat(4, 1fr); } }
+.v3-decision-btn {
+    text-align: left; background: var(--ox-surface-2); border: 1px solid var(--ox-border);
+    border-radius: 14px; padding: 16px; cursor: pointer; font-size: 12px; color: var(--ox-text-2);
+    line-height: 1.5; transition: all 160ms var(--ox-ease-out);
+}
+.v3-decision-btn b { display: block; color: var(--ox-text); font-size: 13.5px; margin-bottom: 6px; font-family: var(--ox-font-display); }
+.v3-decision-btn:hover { border-color: var(--ox-vivid); transform: translateY(-2px); }
+.v3-decision-btn.active { border: 2px solid var(--ox-vivid); background: rgba(27, 94, 255, 0.07); }
+
+/* ---------------- 12. ADMIN RULE CARDS ---------------- */
+.v3-admin-grid { display: grid; grid-template-columns: 1fr; gap: 14px; }
+@media (min-width: 980px) { .v3-admin-grid { grid-template-columns: 1fr 1fr; } }
+.v3-rule-card {
+    background: var(--ox-surface); border: 1px solid var(--ox-border);
+    border-radius: 14px; padding: 18px; box-shadow: var(--ox-shadow-card);
+}
+.v3-rule-card h3 { margin: 0 0 4px; font-size: 14px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.v3-rule-card .v3-small { margin-bottom: 10px; }
+.v3-admin-group { grid-column: 1 / -1; padding: 6px 4px 0; border-bottom: 1px solid var(--ox-border); padding-bottom: 8px; }
+.v3-admin-group h3 { font-size: 15px; margin: 0; }
+.v3-type-tag {
+    font-family: var(--ox-font-mono); font-size: 9px; letter-spacing: 0.08em;
+    padding: 3px 7px; border-radius: 6px; background: rgba(27, 94, 255, 0.12);
+    color: var(--ox-vivid); font-weight: 700;
+}
+.v3-type-tag.excel { background: rgba(255, 149, 0, 0.14); color: var(--ox-warning, #e08a00); }
+
+/* ---------------- 13. QUOTE VERSION LIST (sales drawer / P8) ---------------- */
+.v3-version-item {
+    border: 1px solid var(--ox-border); border-radius: 12px; padding: 14px 16px;
+    margin-bottom: 10px; background: var(--ox-surface-2);
+    transition: border-color 150ms var(--ox-ease-out);
+}
+.v3-version-item.selected { border: 2px solid var(--ox-vivid); background: rgba(27, 94, 255, 0.05); }
+.v3-version-top { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+.v3-version-top .ox-radio-row { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ox-text-2); }
+
+/* ---------------- 14. PROGRESS BAR (confidence etc.) ---------------- */
+.v3-bar { height: 7px; background: var(--ox-surface-2); border: 1px solid var(--ox-border); border-radius: 4px; overflow: hidden; }
+.v3-bar > span { display: block; height: 100%; background: linear-gradient(90deg, var(--ox-vivid), #5b8dff); }
+
 /* ---------------- 9. MOBILE ---------------- */
 @media (max-width: 768px) {
     .v3-topbar { padding: 8px 12px; gap: 8px; flex-wrap: wrap; }
