@@ -219,6 +219,10 @@ public static class Api
                 "approve" => Enums.CaseApproved,
                 "approvewithchanges" => Enums.CaseApprovedWithChanges,
                 "reject" or "decline" => Enums.CaseDeclined,
+                // QA fix: these previously left status unchanged — sales never saw returned/manual-quote cases.
+                "returnforclarification" or "needmoreinfo" => Enums.CaseReturnedForClarification,
+                "manualquote" => Enums.CaseUnderReview,
+                "revise" => Enums.CaseReferredToUW,
                 _ => c.Status,
             };
             await repo.UpdateCaseAsync(c);
