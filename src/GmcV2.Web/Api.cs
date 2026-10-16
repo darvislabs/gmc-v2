@@ -146,10 +146,18 @@ public static class Api
             var c = await repo.GetCaseAsync(id);
             if (c is not null) RealDataBridge.TryRegister(id, c, repo);
             var orch = new PipelineOrchestrator(repo, StageHandlers.Demo(ai), ai);
-            await orch.RunAsync(id, force: req.Query["force"].ToString() == "1");
+            // QA fix: fire-and-forget. RunAsync awaited the HTTP request — a client timeout/disconnect
+            // (curl 30-45s, browser fetch) aborted mid-orchestration and left cases half-pipelined.
+            var force = req.Query["force"].ToString() == "1";
+            _ = Task.Run(async () =>
+            {
+                try { await orch.RunAsync(id, force: force); }
+                catch (Exception ex) { Console.Error.WriteLine($"[pipeline] case {id} background run failed: {ex.Message}"); }
+            });
+            await Task.Delay(250); // give the orchestrator a beat to persist the first stage rows
             var fresh = await repo.GetCaseAsync(id); // fresh from DB so StageRuns reflect persisted runs
             var stages = fresh!.StageRuns;
-            return Results.Json(new { caseId = id, status = fresh.Status, caseNumber = fresh.CaseNumber, stageCount = stages.Count, stages, dataSource = DemoPipelineData.HasOverride(id) ? "uploaded" : "demo" });
+            return Results.Json(new { caseId = id, status = fresh.Status, caseNumber = fresh.CaseNumber, stageCount = stages.Count, stages, dataSource = DemoPipelineData.HasOverride(id) ? "uploaded" : "demo", async = true });
         });
 
         app.MapGet("/api/v1/cases/{id:long}/pipeline", async (long id, IGmcRepository repo) =>

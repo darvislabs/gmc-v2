@@ -805,7 +805,10 @@ public sealed partial class SqlRepository : IGmcRepository
         await using var tx = (SqlTransaction)await conn.BeginTransactionAsync();
         using (var del = Cmd(conn, "DELETE FROM ing.StdClaim WHERE CaseId = @case"))
         { del.Transaction = tx; del.Parameters.AddWithValue("@case", caseId); await del.ExecuteNonQueryAsync(); }
-        foreach (var cl in claims)
+        // QA fix: dedupe on ClaimNumber — concurrent Standardize/Analyze writers previously
+        // interleaved and left duplicate claim rows (dated + undated twin) for the same claim.
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var cl in claims.Where(c => seen.Add(c.ClaimNumber ?? Guid.NewGuid().ToString())))
         {
             using var cmd = Cmd(conn, """
                 INSERT ing.StdClaim (CaseId, ClaimNumber, MemberNumber, ClaimStatus, PaidAmount,

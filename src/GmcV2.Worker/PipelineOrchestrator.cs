@@ -56,6 +56,10 @@ public sealed class PipelineOrchestrator
     private readonly Dictionary<string, IStageHandler> _handlers;
     private static readonly JsonSerializerOptions JsonOpts = new(JsonSerializerDefaults.Web);
 
+    // QA fix: serialize pipeline runs per case — overlapping force-kicks previously raced
+    // (concurrent Standardize/Analyze writers produced duplicate StdClaim rows).
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<long, System.Threading.SemaphoreSlim> CaseLocks = new();
+
     /// <summary>Nullable AI gateway (AD-2): handlers use it to fill gaps only; null/empty = deterministic-only.</summary>
     public IAIProviderRegistry? AI { get; }
 
@@ -123,6 +127,20 @@ public sealed class PipelineOrchestrator
     }
 
     public async Task<Case> RunAsync(long caseId, bool force = false)
+    {
+        var gate = CaseLocks.GetOrAdd(caseId, _ => new SemaphoreSlim(1, 1));
+        await gate.WaitAsync();
+        try
+        {
+            return await RunCoreAsync(caseId, force);
+        }
+        finally
+        {
+            gate.Release();
+        }
+    }
+
+    private async Task<Case> RunCoreAsync(long caseId, bool force)
     {
         var c = await _repo.GetCaseAsync(caseId)
             ?? throw new InvalidOperationException($"Case {caseId} not found.");
